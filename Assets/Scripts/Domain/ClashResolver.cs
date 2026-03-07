@@ -18,9 +18,20 @@ public static class ClashResolver
         int attackerCoins = attackerSkill.coinCount;
         int defenderCoins = defenderSkill.coinCount;
 
-        // 코인 합 (클래시)
+        // 코인 합 (클래시) — 코인마다 출혈 소모
         while (attackerCoins > 0 && defenderCoins > 0)
         {
+            // 출혈 처리: 공격 측이 코인 사용 시 출혈 1회 소모
+            int atkBleed = attacker.ConsumeBleed(1);
+            if (atkBleed > 0)
+                result.log += $" | {attacker.UnitName} 출혈 -{atkBleed}";
+            if (!attacker.IsAlive) break;
+
+            int defBleed = defender.ConsumeBleed(1);
+            if (defBleed > 0)
+                result.log += $" | {defender.UnitName} 출혈 -{defBleed}";
+            if (!defender.IsAlive) break;
+
             int attackerPower = CoinCalculator.RollPower(attackerSkill, 1);
             int defenderPower = CoinCalculator.RollPower(defenderSkill, 1);
 
@@ -36,6 +47,29 @@ public static class ClashResolver
                 else
                     attackerCoins--;
             }
+        }
+
+        // 출혈로 사망 체크
+        if (!attacker.IsAlive && !defender.IsAlive)
+        {
+            result.outcome = ClashOutcome.Draw;
+            result.damage = 0;
+            result.log += " | 양측 출혈 사망";
+            return result;
+        }
+        if (!attacker.IsAlive)
+        {
+            result.outcome = ClashOutcome.DefenderWin;
+            result.damage = 0;
+            result.log += $" | {attacker.UnitName} 출혈 사망";
+            return result;
+        }
+        if (!defender.IsAlive)
+        {
+            result.outcome = ClashOutcome.AttackerWin;
+            result.damage = 0;
+            result.log += $" | {defender.UnitName} 출혈 사망";
+            return result;
         }
 
         // 승패 결정

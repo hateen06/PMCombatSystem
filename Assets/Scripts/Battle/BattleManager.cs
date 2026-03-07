@@ -84,7 +84,9 @@ public class BattleManager : MonoBehaviour
         int enemySpeed = enemyUnit.RollSpeed();
 
         _turnCount++;
-        Log($"[ {_turnCount}턴 ] 속도 {allySpeed}:{enemySpeed}");
+        Log($"───── {_turnCount}턴 ─────");
+        Log($"{_selectedSkill.skillName} vs {enemySkill.skillName}");
+        Log($"속도: {allyUnit.UnitName} {allySpeed} / {enemyUnit.UnitName} {enemySpeed}");
 
         ClashResult clash = ClashResolver.Resolve(
             allyUnit, _selectedSkill,
@@ -98,7 +100,14 @@ public class BattleManager : MonoBehaviour
         OnStateChanged?.Invoke(_fsm.Current);
 
         ApplyClashResult(clash);
-        Log(clash.log);
+
+        // 결과 로그 (줄바꿈으로 분리)
+        foreach (var line in clash.log.Split('|'))
+        {
+            var trimmed = line.Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+                Log(trimmed);
+        }
 
         // 3) 전투 종료 체크
         if (!allyUnit.IsAlive || !enemyUnit.IsAlive)

@@ -10,7 +10,7 @@ using TMPro;
 /// </summary>
 public class BattleUI : MonoBehaviour
 {
-    private const int MaxLogLines = 6;
+    private const int MaxLogLines = 10;
 
     [Header("연결")]
     [SerializeField] private BattleManager battleManager;
@@ -24,26 +24,68 @@ public class BattleUI : MonoBehaviour
     [Header("전투 로그")]
     [SerializeField] private TextMeshProUGUI logText;
 
-    [Header("버튼")]
-    [SerializeField] private Button[] skillButtons;
+    [Header("스킬 카드")]
+    [SerializeField] private SkillCardUI[] skillCards;
     [SerializeField] private Button executeButton;
 
     [Header("데미지 팝업")]
     [SerializeField] private DamagePopup popupPrefab;
 
+    // 하위호환 — 기존 버튼도 유지
+    [Header("레거시 버튼 (카드 없을 때)")]
+    [SerializeField] private Button[] skillButtons;
+
     private readonly List<string> _logLines = new List<string>();
+
+    private int _selectedIndex = -1;
 
     private void Start()
     {
-        // 버튼 OnClick 자동 연결
-        for (int i = 0; i < skillButtons.Length; i++)
+        // 스킬 카드 초기화
+        if (skillCards != null && skillCards.Length > 0 && battleManager != null)
         {
-            if (skillButtons[i] == null) continue;
-            int index = i; // 클로저 캡처용
-            skillButtons[i].onClick.AddListener(() => OnSkillButton(index));
+            var skills = battleManager.Ally?.SkillSlots;
+            for (int i = 0; i < skillCards.Length; i++)
+            {
+                if (skillCards[i] == null) continue;
+                int index = i;
+
+                // 데이터 연결
+                if (skills != null && i < skills.Length)
+                    skillCards[i].Setup(skills[i]);
+
+                // 카드 버튼 클릭 연결
+                var btn = skillCards[i].GetComponentInChildren<Button>();
+                if (btn != null)
+                    btn.onClick.AddListener(() => OnSkillCardClicked(index));
+            }
         }
+
+        // 레거시 버튼 OnClick (카드 없을 때 폴백)
+        if (skillButtons != null)
+        {
+            for (int i = 0; i < skillButtons.Length; i++)
+            {
+                if (skillButtons[i] == null) continue;
+                int index = i;
+                skillButtons[i].onClick.AddListener(() => OnSkillButton(index));
+            }
+        }
+
         if (executeButton != null)
             executeButton.onClick.AddListener(OnExecuteButton);
+    }
+
+    private void OnSkillCardClicked(int index)
+    {
+        _selectedIndex = index;
+
+        // 선택 시각 피드백
+        for (int i = 0; i < skillCards.Length; i++)
+            if (skillCards[i] != null)
+                skillCards[i].SetSelected(i == index);
+
+        OnSkillButton(index);
     }
 
     private void OnEnable()
@@ -83,11 +125,27 @@ public class BattleUI : MonoBehaviour
     {
         bool canInteract = state == BattleState.SkillSelect;
 
-        foreach (var btn in skillButtons)
-            if (btn != null) btn.interactable = canInteract;
+        // 스킬 카드
+        if (skillCards != null)
+            foreach (var card in skillCards)
+                if (card != null) card.SetInteractable(canInteract);
+
+        // 레거시 버튼
+        if (skillButtons != null)
+            foreach (var btn in skillButtons)
+                if (btn != null) btn.interactable = canInteract;
 
         if (executeButton != null)
             executeButton.interactable = canInteract;
+
+        // 턴 끝나면 선택 초기화
+        if (canInteract)
+        {
+            _selectedIndex = -1;
+            if (skillCards != null)
+                foreach (var card in skillCards)
+                    if (card != null) card.SetSelected(false);
+        }
     }
 
     // ── UI 갱신 ──
