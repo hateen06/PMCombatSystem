@@ -15,6 +15,11 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private HPBar allyHPBar;
     [SerializeField] private HPBar enemyHPBar;
 
+    [Header("연출")]
+    [SerializeField] private CameraShake cameraShake;
+    [SerializeField] private HitFlash allyFlash;
+    [SerializeField] private HitFlash enemyFlash;
+
     private BattleStateMachine _fsm;
     private SkillData _selectedSkill;
     private int _turnCount;
@@ -141,11 +146,15 @@ public class BattleManager : MonoBehaviour
             case ClashOutcome.AttackerWin:
                 enemyUnit.TakeDamage(clash.damage);
                 if (enemyHPBar != null) enemyHPBar.OnHit();
+                if (enemyFlash != null) enemyFlash.Flash();
+                if (cameraShake != null) cameraShake.Shake();
                 OnDamageDealt?.Invoke(enemyUnit, clash.damage);
                 break;
             case ClashOutcome.DefenderWin:
                 allyUnit.TakeDamage(clash.damage);
                 if (allyHPBar != null) allyHPBar.OnHit();
+                if (allyFlash != null) allyFlash.Flash();
+                if (cameraShake != null) cameraShake.Shake();
                 OnDamageDealt?.Invoke(allyUnit, clash.damage);
                 break;
         }
