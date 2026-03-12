@@ -1,9 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// 전투의 중심 컨트롤러.
-/// 역할: 상태머신 구동 + Unit/UI 연결만 담당.
-/// 전투 규칙(ClashResolver)이나 UI 표현은 여기서 직접 하지 않는다.
+/// 역할: 상태머신 구동 + TurnResolver로 합/일방공격 분류 + 결과 적용.
+/// 전투 규칙은 Domain 레이어에 위임.
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -28,9 +29,9 @@ public class BattleManager : MonoBehaviour
     public System.Action<string> OnLogMessage;
     public System.Action<ClashResult> OnClashResolved;
     public System.Action<BattleState> OnStateChanged;
-    public System.Action<Unit, int> OnDamageDealt;  // 누가, 얼마나
+    public System.Action<Unit, int> OnDamageDealt;
 
-    // ── 프로퍼티 (UI에서 읽기용) ──
+    // ── 프로퍼티 ──
     public Unit Ally => allyUnit;
     public Unit Enemy => enemyUnit;
     public BattleState CurrentState => _fsm.Current;
@@ -42,7 +43,7 @@ public class BattleManager : MonoBehaviour
 
         if (allyUnit == null || enemyUnit == null)
         {
-            Log("※ 유닛이 연결되지 않았습니다");
+            Log("[오류] 유닛이 연결되지 않았습니다");
             return;
         }
 
@@ -57,7 +58,7 @@ public class BattleManager : MonoBehaviour
         OnStateChanged?.Invoke(_fsm.Current);
     }
 
-    // ── UI 버튼에서 호출 ──
+    // ── UI에서 호출 ──
     public void SelectSkill(int index)
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
@@ -67,54 +68,134 @@ public class BattleManager : MonoBehaviour
 
         _selectedSkill = slots[index];
         if (_selectedSkill != null)
-            Log($"▷ 선택: {_selectedSkill.skillName}");
+            Log($"선택: {_selectedSkill.skillName}");
     }
 
-    // ── UI 실행 버튼에서 호출 ──
     public void ExecuteTurn()
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
         if (_selectedSkill == null)
         {
-            Log("※ 스킬을 먼저 선택하세요");
+            Log("[!] 스킬을 먼저 선택하세요");
             return;
         }
 
-        // 1) 클래시 해결
         _fsm.TransitionTo(BattleState.ClashResolve);
         OnStateChanged?.Invoke(_fsm.Current);
 
+        _turnCount++;
+
+        // ── TurnAction 생성 ──
         SkillData enemySkill = PickEnemySkill();
         int allySpeed = allyUnit.RollSpeed();
         int enemySpeed = enemyUnit.RollSpeed();
 
-        _turnCount++;
-        Log($"───── {_turnCount}턴 ─────");
-        Log($"{_selectedSkill.skillName} vs {enemySkill.skillName}");
+        var allyAction = new TurnAction(allyUnit, _selectedSkill, enemyUnit, allySpeed);
+        var enemyAction = new TurnAction(enemyUnit, enemySkill, allyUnit, enemySpeed);
+
+        var actions = new List<TurnAction> { allyAction, enemyAction };
+
+        // ── TurnResolver로 합/일방공격 분류 ──
+        var plan = TurnResolver.Plan(actions);
+
+        Log($"===== {_turnCount}턴 =====");
         Log($"속도: {allyUnit.UnitName} {allySpeed} / {enemyUnit.UnitName} {enemySpeed}");
 
-        ClashResult clash = ClashResolver.Resolve(
-            allyUnit, _selectedSkill,
-            enemyUnit, enemySkill,
-            allySpeed, enemySpeed);
-
-        OnClashResolved?.Invoke(clash);
-
-        // 2) 결과 적용
+        // ── 결과 적용 ──
         _fsm.TransitionTo(BattleState.ApplyResult);
         OnStateChanged?.Invoke(_fsm.Current);
 
-        ApplyClashResult(clash);
+        // 합 처리
+        foreach (var (attacker, defender) in plan.clashes)
+        {
+            Log($"[합] {attacker.skill.skillName} vs {defender.skill.skillName}");
 
-        // 결과 로그 (줄바꿈으로 분리)
+            var clash = ClashResolver.Resolve(
+                attacker.actor, attacker.skill,
+                defender.actor, defender.skill,
+                attacker.speed, defender.speed);
+
+            OnClashResolved?.Invoke(clash);
+            ApplyClashDamage(clash);
+            LogClashResult(clash);
+        }
+
+        // 일방공격 처리
+        foreach (var action in plan.unopposed)
+        {
+            if (!action.actor.IsAlive || !action.target.IsAlive) continue;
+
+            int damage = CoinCalculator.RollPower(action.skill);
+            Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName} -> {action.target.UnitName}에게 {damage} 피해");
+
+            action.target.TakeDamage(damage);
+            ApplyHitEffects(action.target, damage);
+
+            // 상태이상 부여
+            if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
+            {
+                action.target.AddStatus(action.skill.inflictStatus,
+                    action.skill.statusPotency, action.skill.statusCount);
+                Log($"  {action.skill.inflictStatus} +{action.skill.statusPotency}/{action.skill.statusCount}");
+            }
+        }
+
+        // ── 전투 종료 체크 ──
+        CheckBattleEnd();
+
+        _selectedSkill = null;
+    }
+
+    // ── 내부 함수 ──
+
+    private void ApplyClashDamage(ClashResult clash)
+    {
+        switch (clash.outcome)
+        {
+            case ClashOutcome.AttackerWin:
+                enemyUnit.TakeDamage(clash.damage);
+                ApplyHitEffects(enemyUnit, clash.damage);
+                break;
+            case ClashOutcome.DefenderWin:
+                allyUnit.TakeDamage(clash.damage);
+                ApplyHitEffects(allyUnit, clash.damage);
+                break;
+        }
+    }
+
+    private void ApplyHitEffects(Unit target, int damage)
+    {
+        if (damage <= 0) return;
+
+        bool isAlly = target == allyUnit;
+
+        if (isAlly)
+        {
+            if (allyHPBar != null) allyHPBar.OnHit();
+            if (allyFlash != null) allyFlash.Flash();
+        }
+        else
+        {
+            if (enemyHPBar != null) enemyHPBar.OnHit();
+            if (enemyFlash != null) enemyFlash.Flash();
+        }
+
+        if (cameraShake != null) cameraShake.Shake();
+        OnDamageDealt?.Invoke(target, damage);
+    }
+
+    private void LogClashResult(ClashResult clash)
+    {
         foreach (var line in clash.log.Split('|'))
         {
             var trimmed = line.Trim();
             if (!string.IsNullOrEmpty(trimmed))
                 Log(trimmed);
         }
+    }
 
-        // 3) 전투 종료 체크
+    private void CheckBattleEnd()
+    {
         if (!allyUnit.IsAlive || !enemyUnit.IsAlive)
         {
             _fsm.TransitionTo(BattleState.BattleEnd);
@@ -129,40 +210,13 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 다음 턴
             _fsm.TransitionTo(BattleState.SkillSelect);
             OnStateChanged?.Invoke(_fsm.Current);
-        }
-
-        _selectedSkill = null;
-    }
-
-    // ── 내부 함수 ──
-
-    private void ApplyClashResult(ClashResult clash)
-    {
-        switch (clash.outcome)
-        {
-            case ClashOutcome.AttackerWin:
-                enemyUnit.TakeDamage(clash.damage);
-                if (enemyHPBar != null) enemyHPBar.OnHit();
-                if (enemyFlash != null) enemyFlash.Flash();
-                if (cameraShake != null) cameraShake.Shake();
-                OnDamageDealt?.Invoke(enemyUnit, clash.damage);
-                break;
-            case ClashOutcome.DefenderWin:
-                allyUnit.TakeDamage(clash.damage);
-                if (allyHPBar != null) allyHPBar.OnHit();
-                if (allyFlash != null) allyFlash.Flash();
-                if (cameraShake != null) cameraShake.Shake();
-                OnDamageDealt?.Invoke(allyUnit, clash.damage);
-                break;
         }
     }
 
     private SkillData PickEnemySkill()
     {
-        // 단순 랜덤 선택 (나중에 EnemyAI로 분리 가능)
         var slots = enemyUnit.SkillSlots;
         if (slots == null || slots.Length == 0) return null;
         return slots[Random.Range(0, slots.Length)];
