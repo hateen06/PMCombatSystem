@@ -7,7 +7,15 @@ public class Unit : MonoBehaviour
 
     private int currentHP;
     private bool isAlive;
+    private int _sp;
     private readonly List<StatusEffect> statusEffects = new List<StatusEffect>();
+
+    // ── SP 상수 (림버스 규칙) ──
+    public const int SP_MIN = -45;
+    public const int SP_MAX = 45;
+    public const int SP_CLASH_WIN = 10;
+    public const int SP_ALLY_DEATH = -10;
+    public const int SP_PANIC_THRESHOLD = -45;
 
     // 외부에서 읽기만 가능 (캡슐화)
     public string UnitName => unitData != null ? unitData.unitName : "없음";
@@ -16,6 +24,25 @@ public class Unit : MonoBehaviour
     public bool IsAlive => isAlive;
     public float HPRatio => MaxHP > 0 ? (float)currentHP / MaxHP : 0f;
     public SkillData[] SkillSlots => unitData != null ? unitData.skillSlot : null;
+    public int SP => _sp;
+    public bool IsPanicked => _sp <= SP_PANIC_THRESHOLD;
+
+    // ── Stagger ──
+    private bool _isStaggered;
+    private int _staggerTurnsLeft;
+
+    public bool IsStaggered => _isStaggered;
+    public float StaggerThreshold => unitData != null ? unitData.staggerThreshold : 0.5f;
+
+    /// <summary>
+    /// 흐트러짐 상태면 받는 피해 1.5배
+    /// </summary>
+    public float DamageMultiplier => _isStaggered ? 1.5f : 1f;
+
+    /// <summary>
+    /// 코인 앞면 확률 (0~100). 림버스 공식: 50 + SP
+    /// </summary>
+    public int CoinHeadsChance => Mathf.Clamp(50 + _sp, 5, 95);
 
     public void Initialize()
     {
@@ -26,7 +53,25 @@ public class Unit : MonoBehaviour
         }
         currentHP = unitData.maxHP;
         isAlive = true;
+        _sp = 0; // 림버스: 전투 시작 시 SP 0
         statusEffects.Clear();
+    }
+
+    // ── SP 시스템 ──
+
+    public void ChangeSP(int amount)
+    {
+        _sp = Mathf.Clamp(_sp + amount, SP_MIN, SP_MAX);
+    }
+
+    public void OnClashWin()
+    {
+        ChangeSP(SP_CLASH_WIN);
+    }
+
+    public void OnAllyDeath()
+    {
+        ChangeSP(SP_ALLY_DEATH);
     }
 
     public int RollSpeed()
@@ -39,11 +84,44 @@ public class Unit : MonoBehaviour
     {
         if (!isAlive || damage <= 0) return;
 
-        currentHP -= damage;
+        // 흐트러짐 상태면 피해 1.5배
+        int finalDamage = Mathf.RoundToInt(damage * DamageMultiplier);
+        currentHP -= finalDamage;
+
         if (currentHP <= 0)
         {
             currentHP = 0;
             isAlive = false;
+            return;
+        }
+
+        // 흐트러짐 체크: HP가 임계선 이하로 내려갔는가
+        CheckStagger();
+    }
+
+    private void CheckStagger()
+    {
+        if (_isStaggered) return; // 이미 흐트러진 상태
+        if (HPRatio <= StaggerThreshold)
+        {
+            _isStaggered = true;
+            _staggerTurnsLeft = 2; // 현재 턴 + 다음 턴
+            Debug.Log($"[Stagger] {UnitName} 흐트러짐! (HP {HPRatio:P0} <= {StaggerThreshold:P0})");
+        }
+    }
+
+    /// <summary>
+    /// 턴 시작 시 호출. 흐트러짐 카운트다운.
+    /// </summary>
+    public void OnTurnStart()
+    {
+        if (!_isStaggered) return;
+
+        _staggerTurnsLeft--;
+        if (_staggerTurnsLeft <= 0)
+        {
+            _isStaggered = false;
+            Debug.Log($"[Stagger] {UnitName} 흐트러짐 회복!");
         }
     }
 

@@ -18,8 +18,10 @@ public class BattleUI : MonoBehaviour
     [Header("유닛 정보")]
     [SerializeField] private TextMeshProUGUI allyNameText;
     [SerializeField] private TextMeshProUGUI allyHPText;
+    [SerializeField] private TextMeshProUGUI allySPText;
     [SerializeField] private TextMeshProUGUI enemyNameText;
     [SerializeField] private TextMeshProUGUI enemyHPText;
+    [SerializeField] private TextMeshProUGUI enemySPText;
 
     [Header("전투 로그")]
     [SerializeField] private TextMeshProUGUI logText;
@@ -161,12 +163,26 @@ public class BattleUI : MonoBehaviour
         {
             if (allyNameText != null) allyNameText.text = ally.UnitName;
             if (allyHPText != null) allyHPText.text = $"{ally.CurrentHP}/{ally.MaxHP}";
+            if (allySPText != null)
+            {
+                allySPText.text = $"SP: {ally.SP}  ({ally.CoinHeadsChance}%)";
+                allySPText.color = ally.SP >= 0
+                    ? new Color(0.5f, 0.8f, 1f)
+                    : new Color(1f, 0.4f, 0.4f);
+            }
         }
 
         if (enemy != null)
         {
             if (enemyNameText != null) enemyNameText.text = enemy.UnitName;
             if (enemyHPText != null) enemyHPText.text = $"{enemy.CurrentHP}/{enemy.MaxHP}";
+            if (enemySPText != null)
+            {
+                enemySPText.text = $"SP: {enemy.SP}  ({enemy.CoinHeadsChance}%)";
+                enemySPText.color = enemy.SP >= 0
+                    ? new Color(0.5f, 0.8f, 1f)
+                    : new Color(1f, 0.4f, 0.4f);
+            }
         }
     }
 

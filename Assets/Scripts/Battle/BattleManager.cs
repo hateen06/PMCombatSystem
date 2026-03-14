@@ -3,8 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 전투의 중심 컨트롤러.
-/// 역할: 상태머신 구동 + TurnResolver로 합/일방공격 분류 + 결과 적용.
-/// 전투 규칙은 Domain 레이어에 위임.
+/// TurnResolver로 합/일방공격 분류 + SP/Stagger 반영.
 /// </summary>
 public class BattleManager : MonoBehaviour
 {
@@ -25,7 +24,7 @@ public class BattleManager : MonoBehaviour
     private SkillData _selectedSkill;
     private int _turnCount;
 
-    // ── 이벤트 (UI가 구독) ──
+    // ── 이벤트 ──
     public System.Action<string> OnLogMessage;
     public System.Action<ClashResult> OnClashResolved;
     public System.Action<BattleState> OnStateChanged;
@@ -43,7 +42,7 @@ public class BattleManager : MonoBehaviour
 
         if (allyUnit == null || enemyUnit == null)
         {
-            Log("[오류] 유닛이 연결되지 않았습니다");
+            Log("[오류] 유닛 미연결");
             return;
         }
 
@@ -58,7 +57,6 @@ public class BattleManager : MonoBehaviour
         OnStateChanged?.Invoke(_fsm.Current);
     }
 
-    // ── UI에서 호출 ──
     public void SelectSkill(int index)
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
@@ -85,21 +83,35 @@ public class BattleManager : MonoBehaviour
 
         _turnCount++;
 
+        // ── 턴 시작: Stagger 회복 체크 ──
+        allyUnit.OnTurnStart();
+        enemyUnit.OnTurnStart();
+
+        Log($"===== {_turnCount}턴 =====");
+
+        // ── Stagger 체크 ──
+        if (allyUnit.IsStaggered)
+            Log($"{allyUnit.UnitName} 흐트러짐! 행동 불가 (피해 +50%)");
+        if (enemyUnit.IsStaggered)
+            Log($"{enemyUnit.UnitName} 흐트러짐! 행동 불가 (피해 +50%)");
+
         // ── TurnAction 생성 ──
         SkillData enemySkill = PickEnemySkill();
         int allySpeed = allyUnit.RollSpeed();
         int enemySpeed = enemyUnit.RollSpeed();
 
-        var allyAction = new TurnAction(allyUnit, _selectedSkill, enemyUnit, allySpeed);
-        var enemyAction = new TurnAction(enemyUnit, enemySkill, allyUnit, enemySpeed);
+        Log($"속도: {allyUnit.UnitName} {allySpeed} / {enemyUnit.UnitName} {enemySpeed}");
 
-        var actions = new List<TurnAction> { allyAction, enemyAction };
+        // 흐트러진 유닛은 행동 불가
+        var actions = new List<TurnAction>();
+
+        if (!allyUnit.IsStaggered)
+            actions.Add(new TurnAction(allyUnit, _selectedSkill, enemyUnit, allySpeed));
+        if (!enemyUnit.IsStaggered && enemySkill != null)
+            actions.Add(new TurnAction(enemyUnit, enemySkill, allyUnit, enemySpeed));
 
         // ── TurnResolver로 합/일방공격 분류 ──
         var plan = TurnResolver.Plan(actions);
-
-        Log($"===== {_turnCount}턴 =====");
-        Log($"속도: {allyUnit.UnitName} {allySpeed} / {enemyUnit.UnitName} {enemySpeed}");
 
         // ── 결과 적용 ──
         _fsm.TransitionTo(BattleState.ApplyResult);
@@ -125,13 +137,12 @@ public class BattleManager : MonoBehaviour
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
 
-            int damage = CoinCalculator.RollPower(action.skill);
-            Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName} -> {action.target.UnitName}에게 {damage} 피해");
+            int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
+            Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName} -> {damage} 피해");
 
             action.target.TakeDamage(damage);
             ApplyHitEffects(action.target, damage);
 
-            // 상태이상 부여
             if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
             {
                 action.target.AddStatus(action.skill.inflictStatus,
@@ -140,9 +151,7 @@ public class BattleManager : MonoBehaviour
             }
         }
 
-        // ── 전투 종료 체크 ──
         CheckBattleEnd();
-
         _selectedSkill = null;
     }
 
@@ -168,7 +177,6 @@ public class BattleManager : MonoBehaviour
         if (damage <= 0) return;
 
         bool isAlly = target == allyUnit;
-
         if (isAlly)
         {
             if (allyHPBar != null) allyHPBar.OnHit();
@@ -182,6 +190,10 @@ public class BattleManager : MonoBehaviour
 
         if (cameraShake != null) cameraShake.Shake();
         OnDamageDealt?.Invoke(target, damage);
+
+        // Stagger 알림
+        if (target.IsStaggered)
+            Log($"  >> {target.UnitName} 흐트러짐 발생!");
     }
 
     private void LogClashResult(ClashResult clash)

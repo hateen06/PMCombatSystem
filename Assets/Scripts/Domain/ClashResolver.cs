@@ -32,8 +32,8 @@ public static class ClashResolver
                 result.log += $" | {defender.UnitName} 출혈 -{defBleed}";
             if (!defender.IsAlive) break;
 
-            int attackerPower = CoinCalculator.RollPower(attackerSkill, 1);
-            int defenderPower = CoinCalculator.RollPower(defenderSkill, 1);
+            int attackerPower = CoinCalculator.RollPower(attackerSkill, 1, attacker.CoinHeadsChance);
+            int defenderPower = CoinCalculator.RollPower(defenderSkill, 1, defender.CoinHeadsChance);
 
             if (attackerPower > defenderPower)
                 defenderCoins--;
@@ -76,8 +76,11 @@ public static class ClashResolver
         if (attackerCoins > 0)
         {
             result.outcome = ClashOutcome.AttackerWin;
-            result.damage = CoinCalculator.RollPower(attackerSkill, attackerCoins);
+            result.damage = CoinCalculator.RollPower(attackerSkill, attackerCoins, attacker.CoinHeadsChance);
             result.log = $"{attacker.UnitName} 클래시 승리! 피해 {result.damage}";
+
+            // SP 변동: 승자 +10
+            attacker.OnClashWin();
 
             // 상태이상 부여
             if (attackerSkill.statusPotency > 0 && attackerSkill.statusCount > 0)
@@ -90,8 +93,11 @@ public static class ClashResolver
         else if (defenderCoins > 0)
         {
             result.outcome = ClashOutcome.DefenderWin;
-            result.damage = CoinCalculator.RollPower(defenderSkill, defenderCoins);
+            result.damage = CoinCalculator.RollPower(defenderSkill, defenderCoins, defender.CoinHeadsChance);
             result.log = $"{defender.UnitName} 클래시 승리! 피해 {result.damage}";
+
+            // SP 변동: 승자 +10
+            defender.OnClashWin();
 
             if (defenderSkill.statusPotency > 0 && defenderSkill.statusCount > 0)
             {
