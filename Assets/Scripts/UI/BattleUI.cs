@@ -96,6 +96,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnLogMessage += AddLog;
         battleManager.OnStateChanged += OnStateChanged;
         battleManager.OnDamageDealt += SpawnDamagePopup;
+        battleManager.OnHandDrawn += RefreshSkillCards;
     }
 
     private void OnDisable()
@@ -104,6 +105,28 @@ public class BattleUI : MonoBehaviour
         battleManager.OnLogMessage -= AddLog;
         battleManager.OnStateChanged -= OnStateChanged;
         battleManager.OnDamageDealt -= SpawnDamagePopup;
+        battleManager.OnHandDrawn -= RefreshSkillCards;
+    }
+
+    private void RefreshSkillCards()
+    {
+        if (battleManager?.Ally?.Deck == null || skillCards == null) return;
+
+        var hand = battleManager.Ally.Deck.CurrentHand;
+        for (int i = 0; i < skillCards.Length; i++)
+        {
+            if (skillCards[i] == null) continue;
+
+            if (i < hand.Count && hand[i] != null)
+            {
+                skillCards[i].gameObject.SetActive(true);
+                skillCards[i].Setup(hand[i]);
+            }
+            else
+            {
+                skillCards[i].gameObject.SetActive(false);
+            }
+        }
     }
 
     private void Update()

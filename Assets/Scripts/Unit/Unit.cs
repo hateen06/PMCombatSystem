@@ -44,6 +44,9 @@ public class Unit : MonoBehaviour
     /// </summary>
     public int CoinHeadsChance => Mathf.Clamp(50 + _sp, 5, 95);
 
+    private SkillDeck _deck;
+    public SkillDeck Deck => _deck;
+
     public void Initialize()
     {
         if (unitData == null)
@@ -53,8 +56,19 @@ public class Unit : MonoBehaviour
         }
         currentHP = unitData.maxHP;
         isAlive = true;
-        _sp = 0; // 림버스: 전투 시작 시 SP 0
+        _sp = 0;
+        _isStaggered = false;
+        _staggerTurnsLeft = 0;
         statusEffects.Clear();
+
+        // 스킬 덱 초기화 (3개 슬롯 → 스킬1, 스킬2, 스킬3)
+        var slots = SkillSlots;
+        if (slots != null && slots.Length >= 3)
+            _deck = new SkillDeck(slots[0], slots[1], slots[2]);
+        else if (slots != null && slots.Length == 2)
+            _deck = new SkillDeck(slots[0], slots[1], null);
+        else if (slots != null && slots.Length == 1)
+            _deck = new SkillDeck(slots[0], null, null);
     }
 
     // ── SP 시스템 ──
