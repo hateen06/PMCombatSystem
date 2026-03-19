@@ -96,10 +96,17 @@ public class Unit : MonoBehaviour
 
     public void TakeDamage(int damage)
     {
+        TakeDamage(damage, DamageType.Slash);
+    }
+
+    public void TakeDamage(int damage, DamageType damageType)
+    {
         if (!isAlive || damage <= 0) return;
 
-        // 흐트러짐 상태면 피해 1.5배
-        int finalDamage = Mathf.RoundToInt(damage * DamageMultiplier);
+        float resist = GetResistance(damageType);
+
+        // 피해 타입 저항 × 흐트러짐 배율
+        int finalDamage = Mathf.RoundToInt(damage * resist * DamageMultiplier);
         currentHP -= finalDamage;
 
         if (currentHP <= 0)
@@ -109,8 +116,20 @@ public class Unit : MonoBehaviour
             return;
         }
 
-        // 흐트러짐 체크: HP가 임계선 이하로 내려갔는가
         CheckStagger();
+    }
+
+    public float GetResistance(DamageType damageType)
+    {
+        if (unitData == null) return 1f;
+
+        switch (damageType)
+        {
+            case DamageType.Slash: return unitData.slashResist;
+            case DamageType.Pierce: return unitData.pierceResist;
+            case DamageType.Blunt: return unitData.bluntResist;
+            default: return 1f;
+        }
     }
 
     private void CheckStagger()

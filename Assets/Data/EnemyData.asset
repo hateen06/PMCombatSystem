@@ -19,3 +19,8 @@ MonoBehaviour:
   skillSlot:
   - {fileID: 11400000, guid: 5b113fd22019aa849ba53ccc22c93b39, type: 2}
   - {fileID: 11400000, guid: 8ea8a78b96a21f64c8cab36a662e7bc6, type: 2}
+  - {fileID: 11400000, guid: 54ca4b184306f374bbb4f72d97dfdb35, type: 2}
+  slashResist: 1.5
+  pierceResist: 0.5
+  bluntResist: 1
+  staggerThreshold: 0.5

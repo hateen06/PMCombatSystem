@@ -91,7 +91,7 @@ public class BattleManager : MonoBehaviour
 
         foreach (var pair in plan.clashes)
         {
-            Log("[합] " + pair.attacker.skill.skillName + " vs " + pair.defender.skill.skillName);
+            Log("[합] " + pair.attacker.skill.skillName + "(" + GetDamageTypeLabel(pair.attacker.skill) + ") vs " + pair.defender.skill.skillName + "(" + GetDamageTypeLabel(pair.defender.skill) + ")");
             var clash = ClashResolver.Resolve(pair.attacker.actor, pair.attacker.skill,
                 pair.defender.actor, pair.defender.skill, pair.attacker.speed, pair.defender.speed);
             OnClashResolved?.Invoke(clash);
@@ -103,9 +103,9 @@ public class BattleManager : MonoBehaviour
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
             int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
-            Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + " -> " + damage + " 피해");
-            action.target.TakeDamage(damage);
-            ApplyHitEffects(action.target, damage);
+            Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
+            action.target.TakeDamage(damage, action.skill.damageType);
+            ApplyHitEffects(action.target, damage, action.skill.damageType);
             if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
             {
                 action.target.AddStatus(action.skill.inflictStatus, action.skill.statusPotency, action.skill.statusCount);
@@ -129,24 +129,31 @@ public class BattleManager : MonoBehaviour
     {
         if (clash.outcome == ClashOutcome.AttackerWin)
         {
-            enemyUnit.TakeDamage(clash.damage);
-            ApplyHitEffects(enemyUnit, clash.damage);
+            enemyUnit.TakeDamage(clash.damage, clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash);
+            ApplyHitEffects(enemyUnit, clash.damage, clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash);
         }
         else if (clash.outcome == ClashOutcome.DefenderWin)
         {
-            allyUnit.TakeDamage(clash.damage);
-            ApplyHitEffects(allyUnit, clash.damage);
+            allyUnit.TakeDamage(clash.damage, clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash);
+            ApplyHitEffects(allyUnit, clash.damage, clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash);
         }
     }
 
-    private void ApplyHitEffects(Unit target, int damage)
+    private void ApplyHitEffects(Unit target, int damage, DamageType damageType)
     {
         if (damage <= 0) return;
+
+        float resist = target.GetResistance(damageType);
+        int finalDamage = Mathf.RoundToInt(damage * resist * target.DamageMultiplier);
+
         bool isAlly = target == allyUnit;
         if (isAlly) { if (allyHPBar != null) allyHPBar.OnHit(); if (allyFlash != null) allyFlash.Flash(); }
         else { if (enemyHPBar != null) enemyHPBar.OnHit(); if (enemyFlash != null) enemyFlash.Flash(); }
         if (cameraShake != null) cameraShake.Shake();
-        OnDamageDealt?.Invoke(target, damage);
+        OnDamageDealt?.Invoke(target, finalDamage);
+
+        Log("  >> 저항: " + GetResistanceLabel(resist) + " x" + resist.ToString("0.0") + " => " + finalDamage + " 피해");
+
         if (target.IsStaggered) Log("  >> " + target.UnitName + " 흐트러짐 발생!");
     }
 
@@ -186,6 +193,26 @@ public class BattleManager : MonoBehaviour
         var slots = enemyUnit.SkillSlots;
         if (slots == null || slots.Length == 0) return null;
         return slots[Random.Range(0, slots.Length)];
+    }
+
+    private string GetDamageTypeLabel(SkillData skill)
+    {
+        if (skill == null) return "없음";
+
+        switch (skill.damageType)
+        {
+            case DamageType.Slash: return "참격";
+            case DamageType.Pierce: return "관통";
+            case DamageType.Blunt: return "타격";
+            default: return "없음";
+        }
+    }
+
+    private string GetResistanceLabel(float resist)
+    {
+        if (resist < 1f) return "내성";
+        if (resist > 1f) return "취약";
+        return "보통";
     }
 
     private void Log(string message)

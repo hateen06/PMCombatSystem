@@ -6,6 +6,8 @@ public static class ClashResolver
         int attackerSpeed, int defenderSpeed)
     {
         ClashResult result = new ClashResult();
+        result.attackerSkill = attackerSkill;
+        result.defenderSkill = defenderSkill;
 
         if (attacker == null || defender == null ||
             attackerSkill == null || defenderSkill == null)
