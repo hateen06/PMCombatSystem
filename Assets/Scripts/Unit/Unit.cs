@@ -30,6 +30,7 @@ public class Unit : MonoBehaviour
     // ── Stagger ──
     private bool _isStaggered;
     private int _staggerTurnsLeft;
+    private bool _staggerAppliedThisTurn;
 
     public bool IsStaggered => _isStaggered;
     public float StaggerThreshold => unitData != null ? unitData.staggerThreshold : 0.5f;
@@ -59,6 +60,7 @@ public class Unit : MonoBehaviour
         _sp = 0;
         _isStaggered = false;
         _staggerTurnsLeft = 0;
+        _staggerAppliedThisTurn = false;
         statusEffects.Clear();
 
         // 스킬 덱 초기화 (3개 슬롯 → 스킬1, 스킬2, 스킬3)
@@ -94,14 +96,14 @@ public class Unit : MonoBehaviour
         return Random.Range(unitData.minSpeed, unitData.maxSpeed + 1);
     }
 
-    public void TakeDamage(int damage)
+    public int TakeDamage(int damage)
     {
-        TakeDamage(damage, DamageType.Slash);
+        return TakeDamage(damage, DamageType.Slash);
     }
 
-    public void TakeDamage(int damage, DamageType damageType)
+    public int TakeDamage(int damage, DamageType damageType)
     {
-        if (!isAlive || damage <= 0) return;
+        if (!isAlive || damage <= 0) return 0;
 
         float resist = GetResistance(damageType);
 
@@ -113,10 +115,11 @@ public class Unit : MonoBehaviour
         {
             currentHP = 0;
             isAlive = false;
-            return;
+            return finalDamage;
         }
 
         CheckStagger();
+        return finalDamage;
     }
 
     public float GetResistance(DamageType damageType)
@@ -138,17 +141,25 @@ public class Unit : MonoBehaviour
         if (HPRatio <= StaggerThreshold)
         {
             _isStaggered = true;
-            _staggerTurnsLeft = 2; // 현재 턴 + 다음 턴
+            _staggerTurnsLeft = 1; // 다음 턴 1회 행동 불가
+            _staggerAppliedThisTurn = true;
             Debug.Log($"[Stagger] {UnitName} 흐트러짐! (HP {HPRatio:P0} <= {StaggerThreshold:P0})");
         }
     }
 
     /// <summary>
-    /// 턴 시작 시 호출. 흐트러짐 카운트다운.
+    /// 턴 시작 시 호출. 이번 턴에 막 걸린 흐트러짐은 건너뛰고,
+    /// 기존 흐트러짐만 카운트다운한다.
     /// </summary>
     public void OnTurnStart()
     {
         if (!_isStaggered) return;
+
+        if (_staggerAppliedThisTurn)
+        {
+            _staggerAppliedThisTurn = false;
+            return;
+        }
 
         _staggerTurnsLeft--;
         if (_staggerTurnsLeft <= 0)

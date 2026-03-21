@@ -18,6 +18,7 @@ public class BattleManager : MonoBehaviour
 
     private BattleStateMachine _fsm;
     private SkillData _selectedSkill;
+    private int _selectedIndex = -1;
     private int _turnCount;
 
     public System.Action<string> OnLogMessage;
@@ -53,7 +54,9 @@ public class BattleManager : MonoBehaviour
         if (allyUnit.Deck == null) return;
         var hand = allyUnit.Deck.CurrentHand;
         if (index < 0 || index >= hand.Count) return;
+
         _selectedSkill = hand[index];
+        _selectedIndex = index;
         if (_selectedSkill != null) Log("선택: " + _selectedSkill.skillName);
     }
 
@@ -61,6 +64,12 @@ public class BattleManager : MonoBehaviour
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
         if (_selectedSkill == null) { Log("[!] 스킬을 먼저 선택하세요"); return; }
+
+        // 선택 카드를 실제 덱에서 소모
+        if (allyUnit.Deck != null && _selectedIndex >= 0)
+        {
+            _selectedSkill = allyUnit.Deck.UseCard(_selectedIndex);
+        }
 
         _fsm.TransitionTo(BattleState.ClashResolve);
         OnStateChanged?.Invoke(_fsm.Current);
@@ -104,8 +113,8 @@ public class BattleManager : MonoBehaviour
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
             int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
             Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
-            action.target.TakeDamage(damage, action.skill.damageType);
-            ApplyHitEffects(action.target, damage, action.skill.damageType);
+            int finalDamage = action.target.TakeDamage(damage, action.skill.damageType);
+            ApplyHitEffects(action.target, finalDamage, action.skill.damageType);
             if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
             {
                 action.target.AddStatus(action.skill.inflictStatus, action.skill.statusPotency, action.skill.statusCount);
@@ -129,22 +138,23 @@ public class BattleManager : MonoBehaviour
     {
         if (clash.outcome == ClashOutcome.AttackerWin)
         {
-            enemyUnit.TakeDamage(clash.damage, clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash);
-            ApplyHitEffects(enemyUnit, clash.damage, clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash);
+            var type = clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash;
+            int finalDamage = enemyUnit.TakeDamage(clash.damage, type);
+            ApplyHitEffects(enemyUnit, finalDamage, type);
         }
         else if (clash.outcome == ClashOutcome.DefenderWin)
         {
-            allyUnit.TakeDamage(clash.damage, clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash);
-            ApplyHitEffects(allyUnit, clash.damage, clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash);
+            var type = clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash;
+            int finalDamage = allyUnit.TakeDamage(clash.damage, type);
+            ApplyHitEffects(allyUnit, finalDamage, type);
         }
     }
 
-    private void ApplyHitEffects(Unit target, int damage, DamageType damageType)
+    private void ApplyHitEffects(Unit target, int finalDamage, DamageType damageType)
     {
-        if (damage <= 0) return;
+        if (finalDamage <= 0) return;
 
         float resist = target.GetResistance(damageType);
-        int finalDamage = Mathf.RoundToInt(damage * resist * target.DamageMultiplier);
 
         bool isAlly = target == allyUnit;
         if (isAlly) { if (allyHPBar != null) allyHPBar.OnHit(); if (allyFlash != null) allyFlash.Flash(); }
@@ -188,7 +198,8 @@ public class BattleManager : MonoBehaviour
         if (enemyUnit.Deck != null && enemyUnit.Deck.CurrentHand.Count > 0)
         {
             var hand = enemyUnit.Deck.CurrentHand;
-            return hand[Random.Range(0, hand.Count)];
+            int index = Random.Range(0, hand.Count);
+            return enemyUnit.Deck.UseCard(index);
         }
         var slots = enemyUnit.SkillSlots;
         if (slots == null || slots.Length == 0) return null;

@@ -46,21 +46,18 @@ public class BattleUI : MonoBehaviour
         // 스킬 카드 초기화
         if (skillCards != null && skillCards.Length > 0 && battleManager != null)
         {
-            var skills = battleManager.Ally?.SkillSlots;
             for (int i = 0; i < skillCards.Length; i++)
             {
                 if (skillCards[i] == null) continue;
                 int index = i;
-
-                // 데이터 연결
-                if (skills != null && i < skills.Length)
-                    skillCards[i].Setup(skills[i]);
 
                 // 카드 버튼 클릭 연결
                 var btn = skillCards[i].GetComponentInChildren<Button>();
                 if (btn != null)
                     btn.onClick.AddListener(() => OnSkillCardClicked(index));
             }
+
+            RefreshSkillCards();
         }
 
         // 레거시 버튼 OnClick (카드 없을 때 폴백)
