@@ -25,6 +25,8 @@ public class BattleUI : MonoBehaviour
 
     [Header("전투 로그")]
     [SerializeField] private TextMeshProUGUI logText;
+    [SerializeField] private TextMeshProUGUI breakdownText;
+    [SerializeField] private TextMeshProUGUI clashPreviewText;
 
     [Header("스킬 카드")]
     [SerializeField] private SkillCardUI[] skillCards;
@@ -93,6 +95,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnLogMessage += AddLog;
         battleManager.OnStateChanged += OnStateChanged;
         battleManager.OnDamageDealt += SpawnDamagePopup;
+        battleManager.OnBreakdownUpdated += UpdateBreakdown;
+        battleManager.OnClashPreviewUpdated += UpdateClashPreview;
         battleManager.OnHandDrawn += RefreshSkillCards;
     }
 
@@ -102,6 +106,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnLogMessage -= AddLog;
         battleManager.OnStateChanged -= OnStateChanged;
         battleManager.OnDamageDealt -= SpawnDamagePopup;
+        battleManager.OnBreakdownUpdated -= UpdateBreakdown;
+        battleManager.OnClashPreviewUpdated -= UpdateClashPreview;
         battleManager.OnHandDrawn -= RefreshSkillCards;
     }
 
@@ -141,6 +147,18 @@ public class BattleUI : MonoBehaviour
 
         if (logText != null)
             logText.text = string.Join("\n", _logLines);
+    }
+
+    private void UpdateBreakdown(string message)
+    {
+        if (breakdownText != null)
+            breakdownText.text = message;
+    }
+
+    private void UpdateClashPreview(string message)
+    {
+        if (clashPreviewText != null)
+            clashPreviewText.text = message;
     }
 
     private void OnStateChanged(BattleState state)

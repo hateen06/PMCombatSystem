@@ -25,6 +25,8 @@ public class BattleManager : MonoBehaviour
     public System.Action<ClashResult> OnClashResolved;
     public System.Action<BattleState> OnStateChanged;
     public System.Action<Unit, int> OnDamageDealt;
+    public System.Action<string> OnBreakdownUpdated;
+    public System.Action<string> OnClashPreviewUpdated;
     public System.Action OnHandDrawn;
 
     public Unit Ally => allyUnit;
@@ -57,7 +59,11 @@ public class BattleManager : MonoBehaviour
 
         _selectedSkill = hand[index];
         _selectedIndex = index;
-        if (_selectedSkill != null) Log("선택: " + _selectedSkill.skillName);
+        if (_selectedSkill != null)
+        {
+            Log("선택: " + _selectedSkill.skillName);
+            UpdateClashPreview(_selectedSkill);
+        }
     }
 
     public void ExecuteTurn()
@@ -134,6 +140,42 @@ public class BattleManager : MonoBehaviour
         OnHandDrawn?.Invoke();
     }
 
+    private void UpdateClashPreview(SkillData allySkill)
+    {
+        if (allySkill == null || enemyUnit == null)
+        {
+            OnClashPreviewUpdated?.Invoke(string.Empty);
+            return;
+        }
+
+        SkillData enemySkill = null;
+        if (enemyUnit.Deck != null && enemyUnit.Deck.CurrentHand.Count > 0)
+            enemySkill = enemyUnit.Deck.CurrentHand[0];
+        else if (enemyUnit.SkillSlots != null && enemyUnit.SkillSlots.Length > 0)
+            enemySkill = enemyUnit.SkillSlots[0];
+
+        if (enemySkill == null)
+        {
+            OnClashPreviewUpdated?.Invoke("[Preview]\n적 스킬 정보 없음");
+            return;
+        }
+
+        int allyEstimate = allySkill.basePower + Mathf.RoundToInt(allySkill.coinCount * allySkill.coinPower * 0.5f);
+        int enemyEstimate = enemySkill.basePower + Mathf.RoundToInt(enemySkill.coinCount * enemySkill.coinPower * 0.5f);
+        string result;
+        if (allyEstimate >= enemyEstimate + 3) result = "유리";
+        else if (enemyEstimate >= allyEstimate + 3) result = "불리";
+        else result = "보통";
+
+        string preview =
+            $"[Preview]\n" +
+            $"아군: {allySkill.skillName} ({GetDamageTypeLabel(allySkill)}) ~ {allyEstimate}\n" +
+            $"적군: {enemySkill.skillName} ({GetDamageTypeLabel(enemySkill)}) ~ {enemyEstimate}\n" +
+            $"예상 판정: {result}";
+
+        OnClashPreviewUpdated?.Invoke(preview);
+    }
+
     private void ApplyClashDamage(ClashResult clash)
     {
         if (clash.outcome == ClashOutcome.AttackerWin)
@@ -155,12 +197,21 @@ public class BattleManager : MonoBehaviour
         if (finalDamage <= 0) return;
 
         float resist = target.GetResistance(damageType);
+        string damageTypeLabel = GetDamageTypeLabel(damageType);
+        string breakdown =
+            $"[Breakdown]\n" +
+            $"대상: {target.UnitName}\n" +
+            $"피해 타입: {damageTypeLabel}\n" +
+            $"저항: {GetResistanceLabel(resist)} x{resist:0.0}\n" +
+            $"최종 피해: {finalDamage}\n" +
+            $"흐트러짐: {(target.IsStaggered ? "발생" : "없음")}";
 
         bool isAlly = target == allyUnit;
         if (isAlly) { if (allyHPBar != null) allyHPBar.OnHit(); if (allyFlash != null) allyFlash.Flash(); }
         else { if (enemyHPBar != null) enemyHPBar.OnHit(); if (enemyFlash != null) enemyFlash.Flash(); }
         if (cameraShake != null) cameraShake.Shake();
         OnDamageDealt?.Invoke(target, finalDamage);
+        OnBreakdownUpdated?.Invoke(breakdown);
 
         Log("  >> 저항: " + GetResistanceLabel(resist) + " x" + resist.ToString("0.0") + " => " + finalDamage + " 피해");
 
@@ -209,8 +260,12 @@ public class BattleManager : MonoBehaviour
     private string GetDamageTypeLabel(SkillData skill)
     {
         if (skill == null) return "없음";
+        return GetDamageTypeLabel(skill.damageType);
+    }
 
-        switch (skill.damageType)
+    private string GetDamageTypeLabel(DamageType damageType)
+    {
+        switch (damageType)
         {
             case DamageType.Slash: return "참격";
             case DamageType.Pierce: return "관통";
