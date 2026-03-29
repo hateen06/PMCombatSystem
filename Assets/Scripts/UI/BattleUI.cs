@@ -27,6 +27,12 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI logText;
     [SerializeField] private TextMeshProUGUI breakdownText;
     [SerializeField] private TextMeshProUGUI clashPreviewText;
+    [SerializeField] private TextMeshProUGUI intentText;
+
+    [Header("쇼케이스 모드")]
+    [SerializeField] private bool showcaseMode = true;
+    [SerializeField] private GameObject logPanelRoot;
+    [SerializeField] private GameObject breakdownPanelRoot;
 
     [Header("스킬 카드")]
     [SerializeField] private SkillCardUI[] skillCards;
@@ -75,6 +81,8 @@ public class BattleUI : MonoBehaviour
 
         if (executeButton != null)
             executeButton.onClick.AddListener(OnExecuteButton);
+
+        ApplyPresentationMode();
     }
 
     private void OnSkillCardClicked(int index)
@@ -97,6 +105,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnDamageDealt += SpawnDamagePopup;
         battleManager.OnBreakdownUpdated += UpdateBreakdown;
         battleManager.OnClashPreviewUpdated += UpdateClashPreview;
+        battleManager.OnIntentUpdated += UpdateIntent;
         battleManager.OnHandDrawn += RefreshSkillCards;
     }
 
@@ -108,6 +117,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnDamageDealt -= SpawnDamagePopup;
         battleManager.OnBreakdownUpdated -= UpdateBreakdown;
         battleManager.OnClashPreviewUpdated -= UpdateClashPreview;
+        battleManager.OnIntentUpdated -= UpdateIntent;
         battleManager.OnHandDrawn -= RefreshSkillCards;
     }
 
@@ -137,6 +147,22 @@ public class BattleUI : MonoBehaviour
         RefreshUnitInfo();
     }
 
+    private void ApplyPresentationMode()
+    {
+        if (showcaseMode)
+        {
+            if (logPanelRoot != null) logPanelRoot.SetActive(false);
+            if (breakdownPanelRoot != null) breakdownPanelRoot.SetActive(false);
+            else if (breakdownText != null) breakdownText.gameObject.SetActive(false);
+        }
+        else
+        {
+            if (logPanelRoot != null) logPanelRoot.SetActive(true);
+            if (breakdownPanelRoot != null) breakdownPanelRoot.SetActive(true);
+            else if (breakdownText != null) breakdownText.gameObject.SetActive(true);
+        }
+    }
+
     // ── 이벤트 핸들러 ──
 
     private void AddLog(string message)
@@ -159,6 +185,12 @@ public class BattleUI : MonoBehaviour
     {
         if (clashPreviewText != null)
             clashPreviewText.text = message;
+    }
+
+    private void UpdateIntent(string message)
+    {
+        if (intentText != null)
+            intentText.text = message;
     }
 
     private void OnStateChanged(BattleState state)

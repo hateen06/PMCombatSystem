@@ -27,6 +27,7 @@ public class BattleManager : MonoBehaviour
     public System.Action<Unit, int> OnDamageDealt;
     public System.Action<string> OnBreakdownUpdated;
     public System.Action<string> OnClashPreviewUpdated;
+    public System.Action<string> OnIntentUpdated;
     public System.Action OnHandDrawn;
 
     public Unit Ally => allyUnit;
@@ -145,6 +146,7 @@ public class BattleManager : MonoBehaviour
         if (allySkill == null || enemyUnit == null)
         {
             OnClashPreviewUpdated?.Invoke(string.Empty);
+            OnIntentUpdated?.Invoke(string.Empty);
             return;
         }
 
@@ -157,6 +159,7 @@ public class BattleManager : MonoBehaviour
         if (enemySkill == null)
         {
             OnClashPreviewUpdated?.Invoke("[Preview]\n적 스킬 정보 없음");
+            OnIntentUpdated?.Invoke("[Intent]\n적 의도 정보 없음");
             return;
         }
 
@@ -173,7 +176,16 @@ public class BattleManager : MonoBehaviour
             $"적군: {enemySkill.skillName} ({GetDamageTypeLabel(enemySkill)}) ~ {enemyEstimate}\n" +
             $"예상 판정: {result}";
 
+        string intent =
+            $"[Intent]\n" +
+            $"1. {allyUnit.UnitName} → {enemyUnit.UnitName}\n" +
+            $"   스킬: {allySkill.skillName} / 타입: {GetDamageTypeLabel(allySkill)}\n" +
+            $"2. {enemyUnit.UnitName} → {allyUnit.UnitName}\n" +
+            $"   스킬: {enemySkill.skillName} / 타입: {GetDamageTypeLabel(enemySkill)}\n" +
+            $"충돌 예상: {(result == "보통" ? "합 예상" : "우세 비교 가능")}";
+
         OnClashPreviewUpdated?.Invoke(preview);
+        OnIntentUpdated?.Invoke(intent);
     }
 
     private void ApplyClashDamage(ClashResult clash)

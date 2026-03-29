@@ -12,6 +12,13 @@ public class BattleDebugPanel : MonoBehaviour
     [SerializeField] private BattleManager battleManager;
     [SerializeField] private GameObject root;
     [SerializeField] private TextMeshProUGUI summaryText;
+    [SerializeField] private bool showOnStart;
+
+    private void Start()
+    {
+        if (root != null)
+            root.SetActive(showOnStart);
+    }
 
     private void Update()
     {
