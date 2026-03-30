@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f733b6fb2d88fed4794b4a4a965673f7, type: 3}
+  m_Name: "\uD30C\uC6B0\uC2A4\uD2B8\uD68C\uD53C"
+  m_EditorClassIdentifier: 
+  skillName: "\uD68C\uD53C"
+  skillType: 2
+  damageType: 0
+  cardArtwork: {fileID: 7819392620410391442, guid: 1006430692690544da21807e52eee929, type: 3}
+  basePower: 2
+  coinCount: 1
+  coinPower: 10
+  inflictStatus: 0
+  statusPotency: 0
+  statusCount: 0

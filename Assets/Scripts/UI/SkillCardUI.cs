@@ -1,12 +1,14 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 
 /// <summary>
 /// 개별 스킬 카드 UI.
 /// 스킬 데이터를 받아서 카드 형태로 표시.
+/// 우클릭 시 방어/회피 전환.
 /// </summary>
-public class SkillCardUI : MonoBehaviour
+public class SkillCardUI : MonoBehaviour, IPointerClickHandler
 {
     [Header("카드 요소")]
     [SerializeField] private Image cardBackground;
@@ -28,6 +30,9 @@ public class SkillCardUI : MonoBehaviour
 
     private SkillData _skillData;
     private bool _isSelected;
+
+    /// <summary>우클릭 시 호출되는 콜백 (외부에서 등록)</summary>
+    public System.Action OnRightClicked;
 
     public void Setup(SkillData skill)
     {
@@ -89,5 +94,11 @@ public class SkillCardUI : MonoBehaviour
     public void SetInteractable(bool interactable)
     {
         if (cardButton != null) cardButton.interactable = interactable;
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.button == PointerEventData.InputButton.Right)
+            OnRightClicked?.Invoke();
     }
 }

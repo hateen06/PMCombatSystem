@@ -8,9 +8,7 @@ using UnityEngine;
 /// </summary>
 public class SkillDeck
 {
-    private readonly SkillData _skill1;
-    private readonly SkillData _skill2;
-    private readonly SkillData _skill3;
+    private readonly SkillData[] _allSkills;
 
     private List<SkillData> _drawPile = new List<SkillData>();
     private List<SkillData> _currentHand = new List<SkillData>();
@@ -19,23 +17,41 @@ public class SkillDeck
     public int RemainingCards => _drawPile.Count;
 
     public SkillDeck(SkillData skill1, SkillData skill2, SkillData skill3)
+        : this(new[] { skill1, skill2, skill3 }) { }
+
+    /// <summary>
+    /// 전체 skillSlot 배열로 초기화.
+    /// 공격: 스킬1 x3 + 스킬2 x2 + 스킬3 x1
+    /// 방어/회피: 각 1장
+    /// </summary>
+    public SkillDeck(SkillData[] skills)
     {
-        _skill1 = skill1;
-        _skill2 = skill2;
-        _skill3 = skill3;
+        _allSkills = skills ?? new SkillData[0];
         Refill();
     }
 
     /// <summary>
-    /// 덱 리필: 스킬1 x3 + 스킬2 x2 + 스킬3 x1 = 6장
+    /// 덱 리필: 공격 스킬은 3/2/1 비율, 방어/회피는 1장씩
     /// </summary>
     public void Refill()
     {
         _drawPile.Clear();
 
-        if (_skill1 != null) { _drawPile.Add(_skill1); _drawPile.Add(_skill1); _drawPile.Add(_skill1); }
-        if (_skill2 != null) { _drawPile.Add(_skill2); _drawPile.Add(_skill2); }
-        if (_skill3 != null) { _drawPile.Add(_skill3); }
+        int attackIdx = 0;
+        int[] attackCounts = { 3, 2, 1 };
+
+        for (int i = 0; i < _allSkills.Length; i++)
+        {
+            var skill = _allSkills[i];
+            if (skill == null) continue;
+
+            // 방어/회피는 덱에 넣지 않음 (우클릭으로만 발동)
+            if (skill.skillType != SkillType.Attack) continue;
+
+            int count = attackIdx < attackCounts.Length ? attackCounts[attackIdx] : 1;
+            for (int c = 0; c < count; c++) _drawPile.Add(skill);
+            attackIdx++;
+        }
 
         Shuffle();
     }
@@ -58,7 +74,8 @@ public class SkillDeck
     }
 
     /// <summary>
-    /// 선택한 스킬을 핸드에서 제거. 안 쓴 카드는 버림.
+    /// 선택한 스킬을 핸드에서 제거.
+    /// 림버스 방식: 사용한 카드만 소모, 안 쓴 카드는 그대로 남음.
     /// </summary>
     public SkillData UseCard(int handIndex)
     {
@@ -66,7 +83,7 @@ public class SkillDeck
             return null;
 
         var skill = _currentHand[handIndex];
-        _currentHand.Clear(); // 안 쓴 카드도 소모됨
+        _currentHand.RemoveAt(handIndex);
         return skill;
     }
 

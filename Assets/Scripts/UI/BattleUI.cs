@@ -66,6 +66,10 @@ public class BattleUI : MonoBehaviour
                 var btn = skillCards[i].GetComponentInChildren<Button>();
                 if (btn != null)
                     btn.onClick.AddListener(() => OnSkillCardClicked(index));
+
+                // 우클릭 → 방어 (아군1 = 이상)
+                int rIdx = i;
+                skillCards[i].OnRightClicked = () => OnSkillCardRightClicked(0, rIdx);
             }
 
             RefreshSkillCards();
@@ -81,6 +85,10 @@ public class BattleUI : MonoBehaviour
                 var btn = skillCards2[i].GetComponentInChildren<Button>();
                 if (btn != null)
                     btn.onClick.AddListener(() => OnSkillCard2Clicked(index));
+
+                // 우클릭 → 회피 (아군2 = 파우스트)
+                int rIdx2 = i;
+                skillCards2[i].OnRightClicked = () => OnSkillCardRightClicked(1, rIdx2);
             }
         }
 
@@ -125,6 +133,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
+        battleManager.OnCardOverridden2 += OnCardOverridden2;
     }
 
     private void OnDisable()
@@ -139,6 +148,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
+        battleManager.OnCardOverridden2 -= OnCardOverridden2;
     }
 
     private void RefreshSkillCards()
@@ -349,6 +359,17 @@ public class BattleUI : MonoBehaviour
         popup.Setup(damage, color);
     }
 
+    private void OnSkillCardRightClicked(int unitIndex, int cardIndex)
+    {
+        battleManager?.SelectDefenseForUnit(unitIndex, cardIndex);
+
+        // 파우스트 카드 비주얼 직접 갱신 (OnCardOverridden은 아군1 기준)
+        if (unitIndex > 0 && skillCards2 != null && cardIndex < skillCards2.Length)
+        {
+            // 현재 상태 확인 후 갱신은 OnCardOverridden에서 처리
+        }
+    }
+
     private void OnSkillCard2Clicked(int index)
     {
         // 아군2 카드 선택 시각 피드백
@@ -362,9 +383,16 @@ public class BattleUI : MonoBehaviour
 
     private void OnCardOverridden(int cardIndex, SkillData newSkill)
     {
-        if (skillCards == null || cardIndex < 0 || cardIndex >= skillCards.Length) return;
-        if (skillCards[cardIndex] != null)
-            skillCards[cardIndex].Setup(newSkill);
+        if (skillCards != null && cardIndex >= 0 && cardIndex < skillCards.Length)
+            if (skillCards[cardIndex] != null)
+                skillCards[cardIndex].Setup(newSkill);
+    }
+
+    private void OnCardOverridden2(int cardIndex, SkillData newSkill)
+    {
+        if (skillCards2 != null && cardIndex >= 0 && cardIndex < skillCards2.Length)
+            if (skillCards2[cardIndex] != null)
+                skillCards2[cardIndex].Setup(newSkill);
     }
 
     // ── 버튼에서 호출 (Inspector OnClick에 연결) ──

@@ -74,14 +74,10 @@ public class Unit : MonoBehaviour
         _staggerCount = 0;
         statusEffects.Clear();
 
-        // 스킬 덱 초기화 (3개 슬롯 → 스킬1, 스킬2, 스킬3)
+        // 스킬 덱 초기화 — 전체 skillSlot 사용 (공격 3/2/1 + 방어/회피 각 1장)
         var slots = SkillSlots;
-        if (slots != null && slots.Length >= 3)
-            _deck = new SkillDeck(slots[0], slots[1], slots[2]);
-        else if (slots != null && slots.Length == 2)
-            _deck = new SkillDeck(slots[0], slots[1], null);
-        else if (slots != null && slots.Length == 1)
-            _deck = new SkillDeck(slots[0], null, null);
+        if (slots != null && slots.Length > 0)
+            _deck = new SkillDeck(slots);
     }
 
     // ── SP 시스템 ──
