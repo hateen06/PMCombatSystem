@@ -271,7 +271,7 @@ public class BattleManager : MonoBehaviour
 
             int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
             Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
-            int finalDamage = action.target.TakeDamage(damage, action.skill.damageType);
+            int finalDamage = action.target.TakeDamage(damage, action.skill.damageType, action.actor.OffenseLevel);
             ApplyHitEffects(action.target, finalDamage, action.skill.damageType);
             if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
             {

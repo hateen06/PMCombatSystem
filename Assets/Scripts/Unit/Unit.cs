@@ -21,7 +21,7 @@ public class Unit : MonoBehaviour
     // 외부에서 읽기만 가능 (캡슐화)
     public string UnitName => unitData != null ? unitData.unitName : "없음";
     public int CurrentHP => currentHP;
-    public int MaxHP => unitData != null ? unitData.maxHP : 0;
+    public int MaxHP => unitData != null ? unitData.LevelHP : 0;
     public bool IsAlive => isAlive;
     public float HPRatio => MaxHP > 0 ? (float)currentHP / MaxHP : 0f;
     public SkillData[] SkillSlots => unitData != null ? unitData.skillSlot : null;
@@ -36,6 +36,9 @@ public class Unit : MonoBehaviour
 
     public bool IsStaggered => _isStaggered;
     public float StaggerThreshold => unitData != null ? unitData.staggerThreshold : 0.5f;
+    public int OffenseLevel => unitData != null ? unitData.OffenseLevel : 0;
+    public int DefenseLevel => unitData != null ? unitData.DefenseLevel : 0;
+
 
     /// <summary>
     /// 흐트러짐 상태면 받는 피해 1.5배
@@ -57,7 +60,7 @@ public class Unit : MonoBehaviour
             isAlive = false;
             return;
         }
-        currentHP = unitData.maxHP;
+        currentHP = unitData.LevelHP;
         isAlive = true;
         _sp = 0;
         _shield = 0;
@@ -124,14 +127,23 @@ public class Unit : MonoBehaviour
         return TakeDamage(damage, DamageType.Slash);
     }
 
-    public int TakeDamage(int damage, DamageType damageType)
+    public int TakeDamage(int damage, DamageType damageType, int attackerOffenseLevel = 0)
     {
         if (!isAlive || damage <= 0) return 0;
 
         float resist = GetResistance(damageType);
 
-        // 피해 타입 저항 × 흐트러짐 배율
-        int finalDamage = Mathf.RoundToInt(damage * resist * DamageMultiplier);
+        // 레벨 보정: diff / (|diff| + 25)
+        float levelMod = 1f;
+        if (attackerOffenseLevel > 0)
+        {
+            int diff = attackerOffenseLevel - DefenseLevel;
+            levelMod = 1f + (float)diff / (Mathf.Abs(diff) + 25);
+        }
+
+        // 피해 타입 저항 × 흐트러짐 배율 × 레벨 보정
+        int finalDamage = Mathf.RoundToInt(damage * resist * DamageMultiplier * levelMod);
+
 
         // Shield 흡수
         if (_shield > 0)

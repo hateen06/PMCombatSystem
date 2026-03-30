@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: AllyData
   m_EditorClassIdentifier: 
   unitName: "\uC774\uC0C1"
-  maxHP: 100
+  maxHP: 170
   minSpeed: 3
-  maxSpeed: 6
+  maxSpeed: 7
   skillSlot:
   - {fileID: 11400000, guid: 5b113fd22019aa849ba53ccc22c93b39, type: 2}
   - {fileID: 11400000, guid: 8ea8a78b96a21f64c8cab36a662e7bc6, type: 2}
@@ -26,3 +26,8 @@ MonoBehaviour:
   pierceResist: 0.5
   bluntResist: 0.5
   staggerThreshold: 0.5
+  level: 15
+  baseHP: 50
+  hpPerLevel: 8
+  offenseMod: 0
+  defenseMod: -1

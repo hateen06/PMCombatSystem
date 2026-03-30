@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: EnemyData
   m_EditorClassIdentifier: 
   unitName: "\uC9C0\uC625\uC758 \uC790\uBB3C\uC1E0"
-  maxHP: 80
+  maxHP: 120
   minSpeed: 2
   maxSpeed: 5
   skillSlot:
@@ -24,3 +24,8 @@ MonoBehaviour:
   pierceResist: 0.5
   bluntResist: 1.5
   staggerThreshold: 0.5
+  level: 10
+  baseHP: 40
+  hpPerLevel: 7
+  offenseMod: -1
+  defenseMod: 0
