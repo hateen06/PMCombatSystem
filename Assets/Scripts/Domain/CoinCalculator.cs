@@ -17,7 +17,7 @@ public static class CoinCalculator
     /// <summary>
     /// SP 반영 위력 계산.
     /// </summary>
-    public static int RollPower(SkillData skill, int coinCount, int headsChance)
+    public static int RollPower(SkillData skill, int coinCount, int headsChance, int paralyzedCoins = 0)
     {
         if (skill == null || coinCount <= 0)
             return 0;
@@ -26,6 +26,10 @@ public static class CoinCalculator
 
         for (int i = 0; i < coinCount; i++)
         {
+            // 마비: 해당 코인은 위력 0 (앞면이든 뒷면이든 무효)
+            if (i < paralyzedCoins)
+                continue;
+
             if (FlipCoin(headsChance))
                 power += skill.coinPower;
         }

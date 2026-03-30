@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f733b6fb2d88fed4794b4a4a965673f7, type: 3}
-  m_Name: Pierce
-  m_EditorClassIdentifier: 
-  skillName: "\uAD00\uD1B5"
+  m_Name: "\uBAB8\uD1B5\uBC15\uCE58\uAE30"
+  m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillName: "\uBAB8\uD1B5\uBC15\uCE58\uAE30"
   skillType: 0
-  damageType: 1
-  cardArtwork: {fileID: 21300000, guid: f95b4ca5a0af7184188edef1e7f13b29, type: 3}
-  basePower: 3
-  coinCount: 3
-  coinPower: 3
-  inflictStatus: 0
-  statusPotency: 0
-  statusCount: 0
+  damageType: 0
+  cardArtwork: {fileID: 0}
+  basePower: 5
+  coinCount: 1
+  coinPower: 5
+  inflictStatus: 1
+  statusPotency: 1
+  statusCount: 1

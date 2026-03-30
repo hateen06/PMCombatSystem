@@ -33,9 +33,13 @@ public class Unit : MonoBehaviour
     private bool _isStaggered;
     private int _staggerTurnsLeft;
     private bool _staggerAppliedThisTurn;
+    private int _staggerCount; // 현재까지 발동된 흐트러짐 단계 (0~3)
 
     public bool IsStaggered => _isStaggered;
-    public float StaggerThreshold => unitData != null ? unitData.staggerThreshold : 0.5f;
+    public int StaggerCount => _staggerCount; // 몇 번째 흐트러짐인지
+    public float StaggerThreshold1 => unitData != null ? unitData.staggerThreshold1 : 0.65f;
+    public float StaggerThreshold2 => unitData != null ? unitData.staggerThreshold2 : 0.35f;
+    public float StaggerThreshold3 => unitData != null ? unitData.staggerThreshold3 : 0.15f;
     public int OffenseLevel => unitData != null ? unitData.OffenseLevel : 0;
     public int DefenseLevel => unitData != null ? unitData.DefenseLevel : 0;
 
@@ -67,6 +71,7 @@ public class Unit : MonoBehaviour
         _isStaggered = false;
         _staggerTurnsLeft = 0;
         _staggerAppliedThisTurn = false;
+        _staggerCount = 0;
         statusEffects.Clear();
 
         // 스킬 덱 초기화 (3개 슬롯 → 스킬1, 스킬2, 스킬3)
@@ -182,14 +187,26 @@ public class Unit : MonoBehaviour
 
     private void CheckStagger()
     {
-        if (_isStaggered) return; // 이미 흐트러진 상태
-        if (HPRatio <= StaggerThreshold)
-        {
-            _isStaggered = true;
-            _staggerTurnsLeft = 1; // 다음 턴 1회 행동 불가
-            _staggerAppliedThisTurn = true;
-            Debug.Log($"[Stagger] {UnitName} 흐트러짐! (HP {HPRatio:P0} <= {StaggerThreshold:P0})");
-        }
+        if (_isStaggered) return; // 이미 흐트러진 상태에선 중복 발동 안 함
+
+        // 3단계 구간 체크 — 아직 발동 안 된 가장 높은 구간 확인
+        float ratio = HPRatio;
+        float nextThreshold = 0f;
+
+        if (_staggerCount == 0 && ratio <= StaggerThreshold1)
+            nextThreshold = StaggerThreshold1;
+        else if (_staggerCount == 1 && ratio <= StaggerThreshold2)
+            nextThreshold = StaggerThreshold2;
+        else if (_staggerCount == 2 && ratio <= StaggerThreshold3)
+            nextThreshold = StaggerThreshold3;
+        else
+            return;
+
+        _staggerCount++;
+        _isStaggered = true;
+        _staggerTurnsLeft = 1;
+        _staggerAppliedThisTurn = true;
+        Debug.Log($"[Stagger] {UnitName} 흐트러짐 {_staggerCount}단계! (HP {ratio:P0} <= {nextThreshold:P0})");
     }
 
     /// <summary>
@@ -258,18 +275,26 @@ public class Unit : MonoBehaviour
     }
 
     /// <summary>
-    /// 마비 효과: 코인 수 감소량 반환.
+    /// 마비 조회: 무효화할 코인 수 반환 (소모하지 않음).
+    /// 림버스 방식 — 턴 종료 시 횟수 감소.
     /// </summary>
-    public int ConsumeParalysis()
+    public int GetParalyzedCoins()
     {
         var para = GetStatus(StatusType.Paralysis);
         if (para == null || para.IsExpired) return 0;
+        return para.potency;
+    }
 
-        int reduction = para.potency;
+    /// <summary>
+    /// 턴 종료 시 마비 횟수 1 감소.
+    /// </summary>
+    public void TickParalysis()
+    {
+        var para = GetStatus(StatusType.Paralysis);
+        if (para == null || para.IsExpired) return;
+
         para.Consume(1);
-
         if (para.IsExpired) statusEffects.Remove(para);
-        return reduction;
     }
 
     /// <summary>

@@ -10,22 +10,25 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5594a9260fec3f04a8e92b997391ba04, type: 3}
-  m_Name: EnemyData
+  m_Name: "\uC774\uC0C1"
   m_EditorClassIdentifier: 
-  unitName: "\uC9C0\uC625\uC758 \uC790\uBB3C\uC1E0"
-  maxHP: 120
-  minSpeed: 2
-  maxSpeed: 5
+  unitName: "\uC774\uC0C1"
+  maxHP: 170
+  minSpeed: 3
+  maxSpeed: 7
   skillSlot:
   - {fileID: 11400000, guid: 5b113fd22019aa849ba53ccc22c93b39, type: 2}
   - {fileID: 11400000, guid: 8ea8a78b96a21f64c8cab36a662e7bc6, type: 2}
   - {fileID: 11400000, guid: 54ca4b184306f374bbb4f72d97dfdb35, type: 2}
+  - {fileID: 11400000, guid: 6f2a30fa9a2b2f8448619397b0f6999d, type: 2}
   slashResist: 0.5
   pierceResist: 0.5
-  bluntResist: 1.5
-  staggerThreshold: 0.5
-  level: 10
-  baseHP: 40
-  hpPerLevel: 7
-  offenseMod: -1
-  defenseMod: 0
+  bluntResist: 0.5
+  staggerThreshold1: 0.65
+  staggerThreshold2: 0.35
+  staggerThreshold3: 0.15
+  level: 15
+  baseHP: 50
+  hpPerLevel: 8
+  offenseMod: 0
+  defenseMod: -1

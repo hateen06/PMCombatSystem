@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f733b6fb2d88fed4794b4a4a965673f7, type: 3}
-  m_Name: Slash
+  m_Name: "\uC5F0\uACA9"
   m_EditorClassIdentifier: 
-  skillName: "\uCC38\uACA9"
+  skillName: "\uC5F0\uACA9"
   skillType: 0
-  damageType: 0
-  cardArtwork: {fileID: 21300000, guid: f0e7e6f9b06bb5e448382e2efbb28c1d, type: 3}
-  basePower: 4
-  coinCount: 2
-  coinPower: 4
+  damageType: 2
+  cardArtwork: {fileID: 21300000, guid: ceac8d67cac22d84f9b7d3a14dbf5a45, type: 3}
+  basePower: 6
+  coinCount: 3
+  coinPower: 2
   inflictStatus: 0
-  statusPotency: 3
-  statusCount: 2
+  statusPotency: 0
+  statusCount: 0

@@ -16,9 +16,10 @@ public class UnitData : ScriptableObject
     public float bluntResist = 1f;
 
     [Header("흐트러짐 (Stagger)")]
-    [Tooltip("HP가 이 비율 이하로 떨어지면 흐트러짐 (0.0~1.0)")]
-    [Range(0.1f, 0.9f)]
-    public float staggerThreshold = 0.5f;
+    [Tooltip("HP가 이 비율 이하로 떨어지면 흐트러짐 — 3단계 구간")]
+    public float staggerThreshold1 = 0.65f;
+    public float staggerThreshold2 = 0.35f;
+    public float staggerThreshold3 = 0.15f;
 
     [Header("레벨")]
     public int level = 1;

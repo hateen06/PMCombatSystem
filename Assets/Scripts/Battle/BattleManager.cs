@@ -249,7 +249,12 @@ public class BattleManager : MonoBehaviour
             //회피 판정
             if (action.target == allyUnit && _isEvading && _evadeSkill != null)
             {
-                int attackPower = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
+                int bleedDmg1 = action.actor.ConsumeBleed(action.skill.coinCount);
+                if (bleedDmg1 > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg1}");
+
+                int paraCoins1 = action.actor.GetParalyzedCoins();
+                int attackPower = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins1);
+                if (paraCoins1 > 0) Log($"  [마비] {action.actor.UnitName} 코인 {paraCoins1}개 무효!");
                 int evadePower = CoinCalculator.RollPower(_evadeSkill, _evadeSkill.coinCount, allyUnit.CoinHeadsChance);
 
                 if (evadePower >= attackPower)
@@ -269,7 +274,13 @@ public class BattleManager : MonoBehaviour
             }
             PlayOneSidedAttackSequence(action.actor, action.target);
 
-            int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
+            // 출혈: 공격자가 코인 던질 때 자신에게 고정 피해
+            int bleedDmg = action.actor.ConsumeBleed(action.skill.coinCount);
+            if (bleedDmg > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg}");
+
+            int paraCoins = action.actor.GetParalyzedCoins();
+            int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins);
+            if (paraCoins > 0) Log($"  [마비] {action.actor.UnitName} 코인 {paraCoins}개 무효!");
             Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
             int finalDamage = action.target.TakeDamage(damage, action.skill.damageType, action.actor.OffenseLevel);
             ApplyHitEffects(action.target, finalDamage, action.skill.damageType);
@@ -280,9 +291,11 @@ public class BattleManager : MonoBehaviour
             }
         }
 
-        // 턴 종료: Shield 소멸
+        // 턴 종료: Shield 소멸 + 마비 횟수 감소
         allyUnit.ClearShield();
         enemyUnit.ClearShield();
+        allyUnit.TickParalysis();
+        enemyUnit.TickParalysis();
 
         CheckBattleEnd();
         _selectedSkill = null;
