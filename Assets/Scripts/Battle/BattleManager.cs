@@ -375,19 +375,37 @@ public class BattleManager : MonoBehaviour
         {
             var unit = allyUnits[ui];
             if (!unit.IsAlive || unit.IsStaggered) continue;
+
             SkillData unitSkill = null;
+            int ci = -1;
+
+            // 선택된 스킬 확인
             if (_unitSelectedSkills.TryGetValue(ui, out unitSkill) && unitSkill != null)
             {
-                // 선택한 카드 소모
-                if (_unitSelectedIndices.TryGetValue(ui, out int ci) && unit.Deck != null)
-                    unit.Deck.UseCard(ci);
-                int spd = unit.RollSpeed();
-                // 타겟 지정된 적 우선, 없으면 랜덤
-                Unit target = _unitTargets.ContainsKey(ui) ? _unitTargets[ui] : GetRandomAliveEnemy();
-                if (target != null && !target.IsAlive) target = GetRandomAliveEnemy();
-                if (target != null)
-                    actions.Add(new TurnAction(unit, unitSkill, target, spd));
+                _unitSelectedIndices.TryGetValue(ui, out ci);
             }
+            else
+            {
+                // 미선택 시 자동: 첫 번째 핸드 카드
+                if (unit.Deck != null && unit.Deck.CurrentHand.Count > 0)
+                {
+                    ci = 0;
+                    unitSkill = unit.Deck.CurrentHand[0];
+                    Log($"[자동] {unit.UnitName} → {unitSkill.skillName}");
+                }
+            }
+
+            if (unitSkill == null) continue;
+
+            // 카드 소모
+            if (ci >= 0 && unit.Deck != null)
+                unit.Deck.UseCard(ci);
+
+            int spd = unit.RollSpeed();
+            Unit target = _unitTargets.ContainsKey(ui) ? _unitTargets[ui] : GetRandomAliveEnemy();
+            if (target != null && !target.IsAlive) target = GetRandomAliveEnemy();
+            if (target != null)
+                actions.Add(new TurnAction(unit, unitSkill, target, spd));
         }
 
         // 적 전원 행동
@@ -425,41 +443,41 @@ public class BattleManager : MonoBehaviour
             //회피 판정
             if (allyUnits.Contains(action.target) && _isEvading && _evadeSkill != null)
             {
-                int bleedDmg1 = action.actor.ConsumeBleed(action.skill.coinCount);
-                if (bleedDmg1 > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg1}");
-
+                // 회피 판정 — 공격자 출혈/마비도 처리
                 int paraCoins1 = action.actor.GetParalyzedCoins();
                 int attackPower = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins1);
+                int bleedDmg1 = action.actor.ConsumeBleed(action.skill.coinCount);
+                if (bleedDmg1 > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg1}");
                 if (paraCoins1 > 0) Log($"  [마비] {action.actor.UnitName} 코인 {paraCoins1}개 무효!");
+
                 int evadePower = CoinCalculator.RollPower(_evadeSkill, _evadeSkill.coinCount, Ally.CoinHeadsChance);
 
                 if (evadePower >= attackPower)
                 {
-                    Log("[회피 성공] " + Ally.UnitName + " 회피! (회피 " + evadePower + " >= 공격 " + attackPower + ")");
-                    continue; // 피해 없음
+                    Log($"[회피 성공] {Ally.UnitName} 회피! (회피 {evadePower} >= 공격 {attackPower})");
+                    continue;
                 }
                 else
                 {
                     int reducedDamage = attackPower - evadePower;
-                    Log("[회피 실패] 관통 피해 " + reducedDamage + " (공격 " + attackPower + " - 회피 " + evadePower + ")");
-                    int evadeFinalDamage = action.target.TakeDamage(reducedDamage, action.skill.damageType);
-                    ApplyHitEffects(action.target, evadeFinalDamage, action.skill.damageType);
+                    var evadeResult = DamageProcessor.Process(new DamageProcessor.DamageContext {
+                        attacker = action.actor, target = action.target,
+                        skill = action.skill, rawDamage = reducedDamage, skipCoinRoll = true
+                    });
+                    Log($"[회피 실패] 관통 피해 {evadeResult.finalDamage} (공격 {attackPower} - 회피 {evadePower})");
+                    ApplyHitEffects(action.target, evadeResult.finalDamage, action.skill.damageType);
                     continue;
-
                 }
             }
             PlayOneSidedAttackSequence(action.actor, action.target);
 
-            // 출혈: 공격자가 코인 던질 때 자신에게 고정 피해
-            int bleedDmg = action.actor.ConsumeBleed(action.skill.coinCount);
-            if (bleedDmg > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg}");
-
-            int paraCoins = action.actor.GetParalyzedCoins();
-            int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins);
-            if (paraCoins > 0) Log($"  [마비] {action.actor.UnitName} 코인 {paraCoins}개 무효!");
-            Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
-            int finalDamage = action.target.TakeDamage(damage, action.skill.damageType, action.actor.OffenseLevel);
-            ApplyHitEffects(action.target, finalDamage, action.skill.damageType);
+            var dmgResult = DamageProcessor.Process(new DamageProcessor.DamageContext {
+                attacker = action.actor, target = action.target, skill = action.skill
+            });
+            if (dmgResult.bleedDamage > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {dmgResult.bleedDamage}");
+            if (dmgResult.paralyzedCoins > 0) Log($"  [마비] {action.actor.UnitName} 코인 {dmgResult.paralyzedCoins}개 무효!");
+            Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName}({GetDamageTypeLabel(action.skill)}) → {dmgResult.finalDamage} 피해");
+            ApplyHitEffects(action.target, dmgResult.finalDamage, action.skill.damageType);
             if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
             {
                 action.target.AddStatus(action.skill.inflictStatus, action.skill.statusPotency, action.skill.statusCount);
@@ -555,15 +573,19 @@ public class BattleManager : MonoBehaviour
     {
         if (clash.outcome == ClashOutcome.AttackerWin)
         {
-            var type = clash.attackerSkill != null ? clash.attackerSkill.damageType : DamageType.Slash;
-            int finalDamage = Enemy.TakeDamage(clash.damage, type);
-            ApplyHitEffects(Enemy, finalDamage, type);
+            var result = DamageProcessor.Process(new DamageProcessor.DamageContext {
+                attacker = Ally, target = Enemy,
+                skill = clash.attackerSkill, rawDamage = clash.damage, skipCoinRoll = true
+            });
+            ApplyHitEffects(Enemy, result.finalDamage, clash.attackerSkill?.damageType ?? DamageType.Slash);
         }
         else if (clash.outcome == ClashOutcome.DefenderWin)
         {
-            var type = clash.defenderSkill != null ? clash.defenderSkill.damageType : DamageType.Slash;
-            int finalDamage = Ally.TakeDamage(clash.damage, type);
-            ApplyHitEffects(Ally, finalDamage, type);
+            var result = DamageProcessor.Process(new DamageProcessor.DamageContext {
+                attacker = Enemy, target = Ally,
+                skill = clash.defenderSkill, rawDamage = clash.damage, skipCoinRoll = true
+            });
+            ApplyHitEffects(Ally, result.finalDamage, clash.defenderSkill?.damageType ?? DamageType.Slash);
         }
     }
 
@@ -619,13 +641,25 @@ public class BattleManager : MonoBehaviour
         {
             int idx = allyUnits.IndexOf(target);
             if (idx >= 0 && idx < allyHPBars.Count && allyHPBars[idx] != null) allyHPBars[idx].OnHit();
-            if (allyFlash != null) allyFlash.Flash();
         }
         else
         {
             int idx = enemyUnits.IndexOf(target);
             if (idx >= 0 && idx < enemyHPBars.Count && enemyHPBars[idx] != null) enemyHPBars[idx].OnHit();
-            if (enemyFlash != null) enemyFlash.Flash();
+        }
+        // 피격 유닛 직접 플래시
+        var flash = target.GetComponent<HitFlash>();
+        if (flash != null) flash.Flash();
+        else
+        {
+            // HitFlash 없으면 SpriteRenderer 색상으로 간이 플래시
+            var sr = target.GetComponent<SpriteRenderer>();
+            if (sr != null)
+            {
+                var origColor = sr.color;
+                sr.color = Color.red;
+                DG.Tweening.DOVirtual.DelayedCall(0.1f, () => { if (sr != null) sr.color = origColor; });
+            }
         }
         if (cameraShake != null) cameraShake.Shake();
         OnDamageDealt?.Invoke(target, finalDamage);

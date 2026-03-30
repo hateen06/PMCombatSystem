@@ -344,17 +344,21 @@ public class BattleUI : MonoBehaviour
         if (popupPrefab == null || damage <= 0) return;
 
         var canvas = GetComponentInParent<Canvas>();
-        if (canvas == null) return;
+        if (canvas == null || Camera.main == null) return;
 
         var popup = Instantiate(popupPrefab, canvas.transform);
         var rect = popup.GetComponent<RectTransform>();
 
-        // 피격 유닛 위치에 따라 팝업 위치 결정
-        bool isAlly = target == battleManager.Ally;
-        rect.anchoredPosition = isAlly
-            ? new Vector2(-300, 100)   // 아군 쪽
-            : new Vector2(300, 100);   // 적 쪽
+        // 유닛 월드 좌표 → 스크린 → Canvas 좌표
+        Vector3 worldPos = target.transform.position + new Vector3(0f, 1.2f, 0f); // 머리 위
+        Vector2 screenPos = Camera.main.WorldToScreenPoint(worldPos);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvas.GetComponent<RectTransform>(), screenPos, canvas.worldCamera, out Vector2 canvasPos);
+        rect.anchoredPosition = canvasPos + new Vector2(Random.Range(-20f, 20f), Random.Range(0f, 30f));
 
+        // 아군 피격 = 빨강, 적 피격 = 노랑
+        bool isAlly = battleManager.AllyUnits != null && 
+            ((System.Collections.Generic.IList<Unit>)battleManager.AllyUnits).Contains(target);
         Color color = isAlly ? Color.red : Color.yellow;
         popup.Setup(damage, color);
     }
