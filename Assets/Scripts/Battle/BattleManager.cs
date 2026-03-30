@@ -19,8 +19,11 @@ public class BattleManager : MonoBehaviour
 
     private BattleStateMachine _fsm;
     private SkillData _selectedSkill;
+    private SkillData _evadeSkill; // 회피에 사용한 카드
     private int _selectedIndex = -1;
     private int _turnCount;
+    private bool _isEvading;
+
 
     public System.Action<string> OnLogMessage;
     public System.Action<ClashResult> OnClashResolved;
@@ -68,11 +71,36 @@ public class BattleManager : MonoBehaviour
             UpdateClashPreview(_selectedSkill);
         }
     }
+    public void SelectEvade(int cardIndex)
+    {
+        _isEvading = true;
+        _selectedSkill = null;
+        _selectedIndex = cardIndex;
+
+        // 버린 카드를 회피용으로 저장 후 소모
+        if (allyUnit.Deck != null && cardIndex >= 0)
+        {
+            var hand = allyUnit.Deck.CurrentHand;
+            if (cardIndex < hand.Count)
+                _evadeSkill = hand[cardIndex];
+            allyUnit.Deck.UseCard(cardIndex);
+        }
+
+        Log("[회피] " + allyUnit.UnitName + " 회피 태세 (" + 
+            (_evadeSkill != null ? _evadeSkill.skillName : "?") + ")");
+    }
+
+    public void OnEvadeButton()
+    {
+        if (_selectedIndex < 0) return;
+        SelectEvade(_selectedIndex);
+        ExecuteTurn();
+    }
 
     public void ExecuteTurn()
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
-        if (_selectedSkill == null) { Log("[!] 스킬을 먼저 선택하세요"); return; }
+        if (_selectedSkill == null && !_isEvading) { Log("[!] 스킬을 먼저 선택하세요"); return; }
 
         // 선택 카드를 실제 덱에서 소모
         if (allyUnit.Deck != null && _selectedIndex >= 0)
@@ -97,7 +125,7 @@ public class BattleManager : MonoBehaviour
         Log("속도: " + allyUnit.UnitName + " " + allySpeed + " / " + enemyUnit.UnitName + " " + enemySpeed);
 
         var actions = new List<TurnAction>();
-        if (!allyUnit.IsStaggered)
+        if (!allyUnit.IsStaggered && !_isEvading)
             actions.Add(new TurnAction(allyUnit, _selectedSkill, enemyUnit, allySpeed));
         if (!enemyUnit.IsStaggered && enemySkill != null)
             actions.Add(new TurnAction(enemyUnit, enemySkill, allyUnit, enemySpeed));
@@ -121,6 +149,27 @@ public class BattleManager : MonoBehaviour
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
 
+            //회피 판정
+            if (action.target == allyUnit && _isEvading && _evadeSkill != null)
+            {
+                int attackPower = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
+                int evadePower = CoinCalculator.RollPower(_evadeSkill, _evadeSkill.coinCount, allyUnit.CoinHeadsChance);
+
+                if (evadePower >= attackPower)
+                {
+                    Log("[회피 성공] " + allyUnit.UnitName + " 회피! (회피 " + evadePower + " >= 공격 " + attackPower + ")");
+                    continue; // 피해 없음
+                }
+                else
+                {
+                    int reducedDamage = attackPower - evadePower;
+                    Log("[회피 실패] 관통 피해 " + reducedDamage + " (공격 " + attackPower + " - 회피 " + evadePower + ")");
+                    int evadeFinalDamage = action.target.TakeDamage(reducedDamage, action.skill.damageType);
+                    ApplyHitEffects(action.target, evadeFinalDamage, action.skill.damageType);
+                    continue;
+
+                }
+            }
             PlayOneSidedAttackSequence(action.actor, action.target);
 
             int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
@@ -136,13 +185,15 @@ public class BattleManager : MonoBehaviour
 
         CheckBattleEnd();
         _selectedSkill = null;
+        _isEvading = false;
+        _evadeSkill = null;
         if (_fsm.Is(BattleState.SkillSelect)) DrawNewHands();
     }
 
     private void DrawNewHands()
     {
-        if (allyUnit.Deck != null) allyUnit.Deck.DrawHand(2);
-        if (enemyUnit.Deck != null) enemyUnit.Deck.DrawHand(2);
+        if (allyUnit.Deck != null) allyUnit.Deck.DrawHand(3);
+        if (enemyUnit.Deck != null) enemyUnit.Deck.DrawHand(3);
         OnHandDrawn?.Invoke();
     }
 
@@ -253,13 +304,19 @@ public class BattleManager : MonoBehaviour
 
         float resist = target.GetResistance(damageType);
         string damageTypeLabel = GetDamageTypeLabel(damageType);
+        string resistColored = resist < 1f
+            ? $"<color=#66FF99>내성</color> x{resist:0.0}"
+            : resist > 1f
+                ? $"<color=#FF6666>취약</color> x{resist:0.0}"
+                : $"보통 x{resist:0.0}";
+
+        string staggerText = target.IsStaggered
+            ? "  <color=#FF6666>흐트러짐!</color>"
+            : "";
+
         string breakdown =
             $"[Breakdown]\n" +
-            $"대상: {target.UnitName}\n" +
-            $"피해 타입: {damageTypeLabel}\n" +
-            $"저항: {GetResistanceLabel(resist)} x{resist:0.0}\n" +
-            $"최종 피해: {finalDamage}\n" +
-            $"흐트러짐: {(target.IsStaggered ? "발생" : "없음")}";
+            $"{target.UnitName}  {GetDamageTypeSymbol(damageType)} {resistColored}  → {finalDamage}{staggerText}";
 
         bool isAlly = target == allyUnit;
         if (isAlly) { if (allyHPBar != null) allyHPBar.OnHit(); if (allyFlash != null) allyFlash.Flash(); }
@@ -339,9 +396,9 @@ public class BattleManager : MonoBehaviour
     {
         switch (damageType)
         {
-            case DamageType.Slash: return "╱";
-            case DamageType.Pierce: return "▲";
-            case DamageType.Blunt: return "●";
+            case DamageType.Slash: return "斬";
+            case DamageType.Pierce: return "貫";
+            case DamageType.Blunt: return "打";
             default: return "?";
         }
     }

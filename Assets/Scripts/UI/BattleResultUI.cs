@@ -17,6 +17,17 @@ public class BattleResultUI : MonoBehaviour
     [SerializeField] private Button retryButton;
     [SerializeField] private BattleManager battleManager;
 
+    private void Awake()
+    {
+        // 씬 로드 즉시 레이캐스트 차단 해제 (다른 UI 클릭 방해 방지)
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 0;
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+        }
+    }
+
     private void Start()
     {
         // 처음엔 안 보이게

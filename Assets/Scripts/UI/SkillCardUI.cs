@@ -48,7 +48,7 @@ public class SkillCardUI : MonoBehaviour
         {
             switch (skill.skillType)
             {
-                case SkillType.Attack:  typeText.text = "▲"; break;
+                case SkillType.Attack:  typeText.text = "攻"; break;
                 case SkillType.Defense: typeText.text = "■"; break;
                 case SkillType.Evade:   typeText.text = "◇"; break;
             }
@@ -59,9 +59,9 @@ public class SkillCardUI : MonoBehaviour
         {
             switch (skill.damageType)
             {
-                case DamageType.Slash:  damageTypeText.text = "╱"; break;
-                case DamageType.Pierce: damageTypeText.text = "▲"; break;
-                case DamageType.Blunt:  damageTypeText.text = "●"; break;
+                case DamageType.Slash:  damageTypeText.text = "斬"; break;
+                case DamageType.Pierce: damageTypeText.text = "貫"; break;
+                case DamageType.Blunt:  damageTypeText.text = "打"; break;
             }
         }
 
