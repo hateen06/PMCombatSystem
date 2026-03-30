@@ -43,6 +43,8 @@ public class BattleManager : MonoBehaviour
     public System.Action<string> OnClashPreviewUpdated;
     public System.Action<string> OnIntentUpdated;
     public System.Action<Unit, Unit> OnTargetPreviewUpdated;
+    public System.Action<Unit, int> OnSpeedRolled;
+    public System.Action<Unit, Unit, bool> OnTargetLineUpdated; // from, to, isClash
     public System.Action OnHandDrawn;
     public System.Action<int, SkillData> OnCardOverridden;
     public System.Action<int, SkillData> OnCardOverridden2;
@@ -181,6 +183,10 @@ public class BattleManager : MonoBehaviour
 
         if (_selectedSkill != null)
             _presenter.UpdateClashPreview(_selectedSkill, Ally, Enemy);
+
+        // 현재 타겟 라인 프리뷰
+        if (activeAlly < allyUnits.Count)
+            OnTargetLineUpdated?.Invoke(allyUnits[activeAlly], target, false);
     }
 
     // ═══════════════════════════════════════
@@ -375,7 +381,20 @@ public class BattleManager : MonoBehaviour
             _unitSelectedSkills, _unitSelectedIndices, _unitTargets,
             GetRandomAliveEnemy, GetRandomAliveAlly, Log);
 
+        // 속도 다이스 표시 갱신
+        foreach (var action in actions)
+            OnSpeedRolled?.Invoke(action.actor, action.speed);
+
         var plan = TurnResolver.Plan(actions);
+
+        // 계획된 타겟 라인 표시 (합/일방 구분)
+        foreach (var pair in plan.clashes)
+        {
+            OnTargetLineUpdated?.Invoke(pair.attacker.actor, pair.defender.actor, true);
+            OnTargetLineUpdated?.Invoke(pair.defender.actor, pair.attacker.actor, true);
+        }
+        foreach (var action in plan.unopposed)
+            OnTargetLineUpdated?.Invoke(action.actor, action.target, false);
 
         // ── 결과 적용 ──
         _fsm.TransitionTo(BattleState.ApplyResult);

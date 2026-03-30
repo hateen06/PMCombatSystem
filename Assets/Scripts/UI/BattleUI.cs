@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -44,11 +45,21 @@ public class BattleUI : MonoBehaviour
     [Header("데미지 팝업")]
     [SerializeField] private DamagePopup popupPrefab;
 
+    [Header("속도 다이스")]
+    [SerializeField] private SpeedDiceUI speedDicePrefab;
+    [SerializeField] private Transform speedDiceRoot;
+
+    [Header("타겟 라인")]
+    [SerializeField] private TargetLineUI targetLinePrefab;
+    [SerializeField] private Transform targetLineRoot;
+
     // 하위호환 — 기존 버튼도 유지
     [Header("레거시 버튼 (카드 없을 때)")]
     [SerializeField] private Button[] skillButtons;
 
     private readonly List<string> _logLines = new List<string>();
+    private readonly Dictionary<Unit, SpeedDiceUI> _speedDiceMap = new Dictionary<Unit, SpeedDiceUI>();
+    private readonly List<TargetLineUI> _targetLines = new List<TargetLineUI>();
 
     private int _selectedIndex = -1;
 
@@ -131,6 +142,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnClashPreviewUpdated += UpdateClashPreview;
         battleManager.OnIntentUpdated += UpdateIntent;
         battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
+        battleManager.OnSpeedRolled += UpdateSpeedDice;
+        battleManager.OnTargetLineUpdated += UpdateTargetLine;
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
         battleManager.OnCardOverridden2 += OnCardOverridden2;
@@ -146,6 +159,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnClashPreviewUpdated -= UpdateClashPreview;
         battleManager.OnIntentUpdated -= UpdateIntent;
         battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
+        battleManager.OnSpeedRolled -= UpdateSpeedDice;
+        battleManager.OnTargetLineUpdated -= UpdateTargetLine;
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
         battleManager.OnCardOverridden2 -= OnCardOverridden2;
@@ -258,6 +273,56 @@ public class BattleUI : MonoBehaviour
         }
     }
 
+    private void UpdateSpeedDice(Unit unit, int speed)
+    {
+        if (unit == null) return;
+
+        if (!_speedDiceMap.TryGetValue(unit, out var dice) || dice == null)
+        {
+            var canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+            var parent = speedDiceRoot != null ? speedDiceRoot : canvas.transform;
+
+            if (speedDicePrefab != null)
+            {
+                dice = Instantiate(speedDicePrefab, parent);
+            }
+            else
+            {
+                var go = new GameObject($"SpeedDice_{unit.UnitName}", typeof(RectTransform), typeof(SpeedDiceUI));
+                go.transform.SetParent(parent, false);
+                dice = go.GetComponent<SpeedDiceUI>();
+            }
+
+            bool isEnemy = battleManager != null && battleManager.EnemyUnits != null &&
+                battleManager.EnemyUnits.Contains(unit);
+            dice.Bind(unit, canvas, isEnemy);
+            _speedDiceMap[unit] = dice;
+        }
+
+        dice.SetValue(speed, highlighted: speed >= 5);
+    }
+
+    private void UpdateTargetLine(Unit from, Unit to, bool isClash)
+    {
+        if (from == null || to == null) return;
+
+        var parent = targetLineRoot != null ? targetLineRoot : transform;
+        TargetLineUI line;
+        if (targetLinePrefab != null)
+        {
+            line = Instantiate(targetLinePrefab, parent);
+        }
+        else
+        {
+            var go = new GameObject($"TargetLine_{from.UnitName}_to_{to.UnitName}", typeof(LineRenderer), typeof(TargetLineUI));
+            go.transform.SetParent(parent, false);
+            line = go.GetComponent<TargetLineUI>();
+        }
+        line.SetTargets(from, to, isClash);
+        _targetLines.Add(line);
+    }
+
     private void OnStateChanged(BattleState state)
     {
         bool canInteract = state == BattleState.SkillSelect;
@@ -279,6 +344,12 @@ public class BattleUI : MonoBehaviour
         if (canInteract)
         {
             _selectedIndex = -1;
+
+            // 이전 타겟 라인 정리
+            for (int i = 0; i < _targetLines.Count; i++)
+                if (_targetLines[i] != null) Destroy(_targetLines[i].gameObject);
+            _targetLines.Clear();
+
             if (skillCards != null)
                 foreach (var card in skillCards)
                     if (card != null) card.SetSelected(false);
