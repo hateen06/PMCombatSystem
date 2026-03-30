@@ -37,6 +37,10 @@ public class BattleManager : MonoBehaviour
     private Dictionary<int, SkillData> _unitSelectedSkills = new();
     private Dictionary<int, int> _unitSelectedIndices = new();
 
+    // 타겟팅 (집중전 방식)
+    private Unit _currentTarget;
+    private Dictionary<int, Unit> _unitTargets = new(); // 유닛별 타겟
+
 
     public System.Action<string> OnLogMessage;
     public System.Action<ClashResult> OnClashResolved;
@@ -69,6 +73,33 @@ public class BattleManager : MonoBehaviour
         DrawNewHands();
         _fsm.TransitionTo(BattleState.SkillSelect);
         OnStateChanged?.Invoke(_fsm.Current);
+    }
+
+    // 이벤트: 타겟 지정됨
+    public System.Action<Unit, Unit> OnTargetAssigned; // (attacker, target)
+
+    /// <summary>적 클릭 시 현재 선택 중인 아군의 타겟으로 지정</summary>
+    public void SetTarget(Unit target)
+    {
+        if (!_fsm.Is(BattleState.SkillSelect)) return;
+        if (target == null || !target.IsAlive) return;
+
+        // 어느 아군이 타겟을 지정하는지 결정
+        // 아군1 카드가 선택됐으면 아군1, 아군2면 아군2
+        int activeAlly = _selectedIndex >= 0 ? 0 : -1;
+        // 유닛별 선택도 체크
+        foreach (var kv in _unitSelectedIndices)
+            if (kv.Value >= 0) activeAlly = kv.Key;
+        
+        if (activeAlly < 0) activeAlly = 0; // 기본 아군1
+
+        _unitTargets[activeAlly] = target;
+        _currentTarget = target;
+        Log($"[타겟] {(activeAlly < allyUnits.Count ? allyUnits[activeAlly].UnitName : "?")} → {target.UnitName}");
+        OnTargetAssigned?.Invoke(activeAlly < allyUnits.Count ? allyUnits[activeAlly] : null, target);
+
+        if (_selectedSkill != null)
+            UpdateClashPreview(_selectedSkill);
     }
 
     /// <summary>유닛 인덱스별 스킬 선택 (멀티유닛용)</summary>
@@ -249,9 +280,13 @@ public class BattleManager : MonoBehaviour
         Log("속도: " + Ally.UnitName + " " + allySpeed + " / " + Enemy.UnitName + " " + enemySpeed);
 
         var actions = new List<TurnAction>();
-        // 아군1 행동
+        // 아군1 행동 — 타겟 지정된 적 우선, 없으면 랜덤
         if (!Ally.IsStaggered && !_isEvading && !isGuarding)
-            actions.Add(new TurnAction(Ally, _selectedSkill, Enemy, allySpeed));
+        {
+            Unit ally1Target = _unitTargets.ContainsKey(0) ? _unitTargets[0] : GetRandomAliveEnemy();
+            if (ally1Target != null && !ally1Target.IsAlive) ally1Target = GetRandomAliveEnemy();
+            actions.Add(new TurnAction(Ally, _selectedSkill, ally1Target ?? Enemy, allySpeed));
+        }
         
         // 아군2+ 행동 (멀티유닛)
         for (int ui = 1; ui < allyUnits.Count; ui++)
@@ -265,8 +300,9 @@ public class BattleManager : MonoBehaviour
                 if (_unitSelectedIndices.TryGetValue(ui, out int ci) && unit.Deck != null)
                     unit.Deck.UseCard(ci);
                 int spd = unit.RollSpeed();
-                // 살아있는 적 중 랜덤 타겟
-                var target = GetRandomAliveEnemy();
+                // 타겟 지정된 적 우선, 없으면 랜덤
+                Unit target = _unitTargets.ContainsKey(ui) ? _unitTargets[ui] : GetRandomAliveEnemy();
+                if (target != null && !target.IsAlive) target = GetRandomAliveEnemy();
                 if (target != null)
                     actions.Add(new TurnAction(unit, unitSkill, target, spd));
             }
@@ -361,6 +397,8 @@ public class BattleManager : MonoBehaviour
         _evadeSkill = null;
         _unitSelectedSkills.Clear();
         _unitSelectedIndices.Clear();
+        _unitTargets.Clear();
+        _currentTarget = null;
         if (_fsm.Is(BattleState.SkillSelect)) DrawNewHands();
     }
 
