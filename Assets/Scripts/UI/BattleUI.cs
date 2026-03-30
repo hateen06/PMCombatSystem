@@ -37,7 +37,8 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private GameObject breakdownPanelRoot;
 
     [Header("스킬 카드")]
-    [SerializeField] private SkillCardUI[] skillCards;
+    [SerializeField] private SkillCardUI[] skillCards;       // 아군1 카드
+    [SerializeField] private SkillCardUI[] skillCards2;      // 아군2 카드
     [SerializeField] private Button executeButton;
 
     [Header("데미지 팝업")]
@@ -68,6 +69,19 @@ public class BattleUI : MonoBehaviour
             }
 
             RefreshSkillCards();
+        }
+
+        // 아군2 스킬 카드 초기화
+        if (skillCards2 != null && skillCards2.Length > 0 && battleManager != null)
+        {
+            for (int i = 0; i < skillCards2.Length; i++)
+            {
+                if (skillCards2[i] == null) continue;
+                int index = i;
+                var btn = skillCards2[i].GetComponentInChildren<Button>();
+                if (btn != null)
+                    btn.onClick.AddListener(() => OnSkillCard2Clicked(index));
+            }
         }
 
         // 레거시 버튼 OnClick (카드 없을 때 폴백)
@@ -129,21 +143,30 @@ public class BattleUI : MonoBehaviour
 
     private void RefreshSkillCards()
     {
-        if (battleManager?.Ally?.Deck == null || skillCards == null) return;
+        // 아군1 카드
+        RefreshCardSet(skillCards, battleManager?.Ally);
+        // 아군2 카드
+        Unit ally2 = null;
+        if (battleManager != null && battleManager.AllyUnits != null && battleManager.AllyUnits.Count > 1)
+            ally2 = battleManager.AllyUnits[1];
+        RefreshCardSet(skillCards2, ally2);
+    }
 
-        var hand = battleManager.Ally.Deck.CurrentHand;
-        for (int i = 0; i < skillCards.Length; i++)
+    private void RefreshCardSet(SkillCardUI[] cards, Unit unit)
+    {
+        if (cards == null) return;
+        var hand = unit?.Deck?.CurrentHand;
+        for (int i = 0; i < cards.Length; i++)
         {
-            if (skillCards[i] == null) continue;
-
-            if (i < hand.Count && hand[i] != null)
+            if (cards[i] == null) continue;
+            if (hand != null && i < hand.Count && hand[i] != null)
             {
-                skillCards[i].gameObject.SetActive(true);
-                skillCards[i].Setup(hand[i]);
+                cards[i].gameObject.SetActive(true);
+                cards[i].Setup(hand[i]);
             }
             else
             {
-                skillCards[i].gameObject.SetActive(false);
+                cards[i].gameObject.SetActive(false);
             }
         }
     }
@@ -324,6 +347,17 @@ public class BattleUI : MonoBehaviour
 
         Color color = isAlly ? Color.red : Color.yellow;
         popup.Setup(damage, color);
+    }
+
+    private void OnSkillCard2Clicked(int index)
+    {
+        // 아군2 카드 선택 시각 피드백
+        if (skillCards2 != null)
+            for (int i = 0; i < skillCards2.Length; i++)
+                if (skillCards2[i] != null)
+                    skillCards2[i].SetSelected(i == index);
+
+        battleManager?.SelectSkillForUnit(1, index);
     }
 
     private void OnCardOverridden(int cardIndex, SkillData newSkill)
