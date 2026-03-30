@@ -19,9 +19,11 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI allyNameText;
     [SerializeField] private TextMeshProUGUI allyHPText;
     [SerializeField] private TextMeshProUGUI allySPText;
+    [SerializeField] private Image allySPFill;
     [SerializeField] private TextMeshProUGUI enemyNameText;
     [SerializeField] private TextMeshProUGUI enemyHPText;
     [SerializeField] private TextMeshProUGUI enemySPText;
+    [SerializeField] private Image enemySPFill;
 
     [Header("전투 로그")]
     [SerializeField] private TextMeshProUGUI logText;
@@ -106,6 +108,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnBreakdownUpdated += UpdateBreakdown;
         battleManager.OnClashPreviewUpdated += UpdateClashPreview;
         battleManager.OnIntentUpdated += UpdateIntent;
+        battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
         battleManager.OnHandDrawn += RefreshSkillCards;
     }
 
@@ -118,6 +121,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnBreakdownUpdated -= UpdateBreakdown;
         battleManager.OnClashPreviewUpdated -= UpdateClashPreview;
         battleManager.OnIntentUpdated -= UpdateIntent;
+        battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
         battleManager.OnHandDrawn -= RefreshSkillCards;
     }
 
@@ -193,6 +197,32 @@ public class BattleUI : MonoBehaviour
             intentText.text = message;
     }
 
+    private void UpdateTargetPreview(Unit source, Unit target)
+    {
+        if (battleManager == null) return;
+
+        var allyRenderer = battleManager.Ally != null ? battleManager.Ally.GetComponent<SpriteRenderer>() : null;
+        var enemyRenderer = battleManager.Enemy != null ? battleManager.Enemy.GetComponent<SpriteRenderer>() : null;
+
+        Color dim = new Color(0.65f, 0.65f, 0.65f, 1f);
+        Color normal = Color.white;
+        Color highlight = new Color(1f, 0.92f, 0.65f, 1f);
+
+        if (allyRenderer != null) allyRenderer.color = normal;
+        if (enemyRenderer != null) enemyRenderer.color = normal;
+
+        if (target == battleManager.Ally)
+        {
+            if (allyRenderer != null) allyRenderer.color = highlight;
+            if (enemyRenderer != null) enemyRenderer.color = dim;
+        }
+        else if (target == battleManager.Enemy)
+        {
+            if (enemyRenderer != null) enemyRenderer.color = highlight;
+            if (allyRenderer != null) allyRenderer.color = dim;
+        }
+    }
+
     private void OnStateChanged(BattleState state)
     {
         bool canInteract = state == BattleState.SkillSelect;
@@ -235,10 +265,18 @@ public class BattleUI : MonoBehaviour
             if (allyHPText != null) allyHPText.text = $"{ally.CurrentHP}/{ally.MaxHP}";
             if (allySPText != null)
             {
-                allySPText.text = $"SP: {ally.SP}  ({ally.CoinHeadsChance}%)";
+                allySPText.text = $"SP: {ally.SP}";
                 allySPText.color = ally.SP >= 0
                     ? new Color(0.5f, 0.8f, 1f)
                     : new Color(1f, 0.4f, 0.4f);
+            }
+            if (allySPFill != null)
+            {
+                float ratio = Mathf.InverseLerp(-45f, 45f, ally.SP);
+                allySPFill.fillAmount = ratio;
+                allySPFill.color = ally.SP >= 0
+                    ? new Color(0.35f, 0.8f, 1f)
+                    : new Color(1f, 0.45f, 0.45f);
             }
         }
 
@@ -248,10 +286,18 @@ public class BattleUI : MonoBehaviour
             if (enemyHPText != null) enemyHPText.text = $"{enemy.CurrentHP}/{enemy.MaxHP}";
             if (enemySPText != null)
             {
-                enemySPText.text = $"SP: {enemy.SP}  ({enemy.CoinHeadsChance}%)";
+                enemySPText.text = $"SP: {enemy.SP}";
                 enemySPText.color = enemy.SP >= 0
                     ? new Color(0.5f, 0.8f, 1f)
                     : new Color(1f, 0.4f, 0.4f);
+            }
+            if (enemySPFill != null)
+            {
+                float ratio = Mathf.InverseLerp(-45f, 45f, enemy.SP);
+                enemySPFill.fillAmount = ratio;
+                enemySPFill.color = enemy.SP >= 0
+                    ? new Color(0.35f, 0.8f, 1f)
+                    : new Color(1f, 0.45f, 0.45f);
             }
         }
     }

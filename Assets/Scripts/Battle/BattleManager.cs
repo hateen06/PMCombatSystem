@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening;
 
 public class BattleManager : MonoBehaviour
 {
@@ -28,6 +29,7 @@ public class BattleManager : MonoBehaviour
     public System.Action<string> OnBreakdownUpdated;
     public System.Action<string> OnClashPreviewUpdated;
     public System.Action<string> OnIntentUpdated;
+    public System.Action<Unit, Unit> OnTargetPreviewUpdated;
     public System.Action OnHandDrawn;
 
     public Unit Ally => allyUnit;
@@ -118,6 +120,9 @@ public class BattleManager : MonoBehaviour
         foreach (var action in plan.unopposed)
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
+
+            PlayOneSidedAttackSequence(action.actor, action.target);
+
             int damage = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance);
             Log("[일방] " + action.actor.UnitName + "의 " + action.skill.skillName + "(" + GetDamageTypeLabel(action.skill) + ") -> " + damage + " 피해");
             int finalDamage = action.target.TakeDamage(damage, action.skill.damageType);
@@ -170,22 +175,33 @@ public class BattleManager : MonoBehaviour
         else if (enemyEstimate >= allyEstimate + 3) result = "불리";
         else result = "보통";
 
+        string resultColored = result == "유리"
+            ? "<color=#66FF99>유리</color>"
+            : result == "불리"
+                ? "<color=#FF6666>불리</color>"
+                : "<color=#FFD966>보통</color>";
+
         string preview =
             $"[Preview]\n" +
-            $"아군: {allySkill.skillName} ({GetDamageTypeLabel(allySkill)}) ~ {allyEstimate}\n" +
-            $"적군: {enemySkill.skillName} ({GetDamageTypeLabel(enemySkill)}) ~ {enemyEstimate}\n" +
-            $"예상 판정: {result}";
+            $"아군  {allySkill.skillName} {GetDamageTypeSymbol(allySkill)}  ~{allyEstimate}\n" +
+            $"적군  {enemySkill.skillName} {GetDamageTypeSymbol(enemySkill)}  ~{enemyEstimate}\n" +
+            $"판정  {resultColored}";
+
+        string clashStateColored = result == "유리"
+            ? "<color=#66FF99>우세</color>"
+            : result == "불리"
+                ? "<color=#FF6666>열세</color>"
+                : "<color=#FFD966>경합</color>";
 
         string intent =
             $"[Intent]\n" +
-            $"1. {allyUnit.UnitName} → {enemyUnit.UnitName}\n" +
-            $"   스킬: {allySkill.skillName} / 타입: {GetDamageTypeLabel(allySkill)}\n" +
-            $"2. {enemyUnit.UnitName} → {allyUnit.UnitName}\n" +
-            $"   스킬: {enemySkill.skillName} / 타입: {GetDamageTypeLabel(enemySkill)}\n" +
-            $"충돌 예상: {(result == "보통" ? "합 예상" : "우세 비교 가능")}";
+            $"{allyUnit.UnitName} → {enemyUnit.UnitName}  {allySkill.skillName} {GetDamageTypeSymbol(allySkill)}\n" +
+            $"{enemyUnit.UnitName} → {allyUnit.UnitName}  {enemySkill.skillName} {GetDamageTypeSymbol(enemySkill)}\n" +
+            $"충돌: {clashStateColored}";
 
         OnClashPreviewUpdated?.Invoke(preview);
         OnIntentUpdated?.Invoke(intent);
+        OnTargetPreviewUpdated?.Invoke(allyUnit, enemyUnit);
     }
 
     private void ApplyClashDamage(ClashResult clash)
@@ -202,6 +218,33 @@ public class BattleManager : MonoBehaviour
             int finalDamage = allyUnit.TakeDamage(clash.damage, type);
             ApplyHitEffects(allyUnit, finalDamage, type);
         }
+    }
+
+    private void PlayOneSidedAttackSequence(Unit attacker, Unit target)
+    {
+        if (attacker == null || target == null) return;
+
+        var attackerTr = attacker.transform;
+        var targetTr = target.transform;
+
+        Vector3 attackerStart = attackerTr.position;
+        Vector3 targetStart = targetTr.position;
+
+        float dir = Mathf.Sign(targetStart.x - attackerStart.x);
+        if (dir == 0f) dir = 1f;
+
+        Vector3 attackStep = new Vector3(dir * 0.8f, 0f, 0f);
+        Vector3 recoilStep = new Vector3(dir * 0.25f, 0f, 0f);
+
+        attackerTr.DOKill();
+        targetTr.DOKill();
+
+        Sequence seq = DOTween.Sequence();
+        seq.Append(attackerTr.DOMove(attackerStart + attackStep, 0.12f).SetEase(Ease.OutQuad));
+        seq.AppendInterval(0.03f);
+        seq.Append(targetTr.DOMove(targetStart + recoilStep, 0.08f).SetEase(Ease.OutQuad));
+        seq.Append(targetTr.DOMove(targetStart, 0.10f).SetEase(Ease.InQuad));
+        seq.Join(attackerTr.DOMove(attackerStart, 0.16f).SetEase(Ease.InOutQuad));
     }
 
     private void ApplyHitEffects(Unit target, int finalDamage, DamageType damageType)
@@ -283,6 +326,23 @@ public class BattleManager : MonoBehaviour
             case DamageType.Pierce: return "관통";
             case DamageType.Blunt: return "타격";
             default: return "없음";
+        }
+    }
+
+    private string GetDamageTypeSymbol(SkillData skill)
+    {
+        if (skill == null) return "?";
+        return GetDamageTypeSymbol(skill.damageType);
+    }
+
+    private string GetDamageTypeSymbol(DamageType damageType)
+    {
+        switch (damageType)
+        {
+            case DamageType.Slash: return "╱";
+            case DamageType.Pierce: return "▲";
+            case DamageType.Blunt: return "●";
+            default: return "?";
         }
     }
 

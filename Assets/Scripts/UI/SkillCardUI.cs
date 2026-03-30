@@ -43,25 +43,25 @@ public class SkillCardUI : MonoBehaviour
             artworkImage.enabled = skill.cardArtwork != null;
         }
 
-        // 행동 타입 표시
+        // 행동 타입 표시 - 긴 텍스트 대신 짧은 심볼 사용
         if (typeText != null)
         {
             switch (skill.skillType)
             {
-                case SkillType.Attack:  typeText.text = "공격"; break;
-                case SkillType.Defense: typeText.text = "방어"; break;
-                case SkillType.Evade:   typeText.text = "회피"; break;
+                case SkillType.Attack:  typeText.text = "▲"; break;
+                case SkillType.Defense: typeText.text = "■"; break;
+                case SkillType.Evade:   typeText.text = "◇"; break;
             }
         }
 
-        // 피해 타입 표시
+        // 피해 타입 표시 - 임시 아이콘형 심볼
         if (damageTypeText != null)
         {
             switch (skill.damageType)
             {
-                case DamageType.Slash:  damageTypeText.text = "참격"; break;
-                case DamageType.Pierce: damageTypeText.text = "관통"; break;
-                case DamageType.Blunt:  damageTypeText.text = "타격"; break;
+                case DamageType.Slash:  damageTypeText.text = "╱"; break;
+                case DamageType.Pierce: damageTypeText.text = "▲"; break;
+                case DamageType.Blunt:  damageTypeText.text = "●"; break;
             }
         }
 
