@@ -15,6 +15,7 @@ public class SkillDeck
 
     public IReadOnlyList<SkillData> CurrentHand => _currentHand;
     public int RemainingCards => _drawPile.Count;
+    public System.Action<IReadOnlyList<SkillData>> OnHandChanged;
 
     public SkillDeck(SkillData skill1, SkillData skill2, SkillData skill3)
         : this(new[] { skill1, skill2, skill3 }) { }
@@ -71,6 +72,8 @@ public class SkillDeck
             _currentHand.Add(_drawPile[0]);
             _drawPile.RemoveAt(0);
         }
+
+        OnHandChanged?.Invoke(CurrentHand);
     }
 
     /// <summary>
@@ -84,6 +87,7 @@ public class SkillDeck
 
         var skill = _currentHand[handIndex];
         _currentHand.RemoveAt(handIndex);
+        OnHandChanged?.Invoke(CurrentHand);
         return skill;
     }
 

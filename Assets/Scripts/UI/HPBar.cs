@@ -19,6 +19,9 @@ public class HPBar : MonoBehaviour
 
     public void Bind(Unit unit)
     {
+        if (_target != null)
+            _target.OnHPChanged -= HandleHPChanged;
+
         _target = unit;
 
         // fillRect 자동 탐색
@@ -45,6 +48,11 @@ public class HPBar : MonoBehaviour
 
         // 흐트러짐 구간 마커 생성
         CreateStaggerMarkers();
+
+        if (_target != null)
+            _target.OnHPChanged += HandleHPChanged;
+
+        Refresh();
     }
 
     /// <summary>
@@ -82,6 +90,11 @@ public class HPBar : MonoBehaviour
 
             _markers.Add(rt);
         }
+    }
+
+    private void HandleHPChanged(int current, int max)
+    {
+        Refresh();
     }
 
     /// <summary>

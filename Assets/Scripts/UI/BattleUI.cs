@@ -60,6 +60,7 @@ public class BattleUI : MonoBehaviour
     private readonly List<string> _logLines = new List<string>();
     private readonly Dictionary<Unit, SpeedDiceUI> _speedDiceMap = new Dictionary<Unit, SpeedDiceUI>();
     private readonly List<TargetLineUI> _targetLines = new List<TargetLineUI>();
+    private readonly HashSet<Unit> _boundUnits = new HashSet<Unit>();
 
     private int _selectedIndex = -1;
 
@@ -84,6 +85,7 @@ public class BattleUI : MonoBehaviour
             }
 
             RefreshSkillCards();
+            BindObservedData();
         }
 
         // 아군2 스킬 카드 초기화
@@ -147,6 +149,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
         battleManager.OnCardOverridden2 += OnCardOverridden2;
+        BindObservedData();
     }
 
     private void OnDisable()
@@ -164,7 +167,47 @@ public class BattleUI : MonoBehaviour
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
         battleManager.OnCardOverridden2 -= OnCardOverridden2;
+        UnbindObservedData();
     }
+
+    private void BindObservedData()
+    {
+        if (battleManager == null) return;
+        foreach (var unit in battleManager.AllyUnits)
+            BindUnit(unit);
+        foreach (var unit in battleManager.EnemyUnits)
+            BindUnit(unit);
+        RefreshUnitInfo();
+        RefreshSkillCards();
+    }
+
+    private void UnbindObservedData()
+    {
+        foreach (var unit in _boundUnits)
+        {
+            if (unit == null) continue;
+            unit.OnHPChanged -= HandleUnitHPChanged;
+            unit.OnSPChanged -= HandleUnitSPChanged;
+            unit.OnStatusChanged -= HandleUnitStatusChanged;
+            if (unit.Deck != null) unit.Deck.OnHandChanged -= HandleHandChanged;
+        }
+        _boundUnits.Clear();
+    }
+
+    private void BindUnit(Unit unit)
+    {
+        if (unit == null || _boundUnits.Contains(unit)) return;
+        unit.OnHPChanged += HandleUnitHPChanged;
+        unit.OnSPChanged += HandleUnitSPChanged;
+        unit.OnStatusChanged += HandleUnitStatusChanged;
+        if (unit.Deck != null) unit.Deck.OnHandChanged += HandleHandChanged;
+        _boundUnits.Add(unit);
+    }
+
+    private void HandleUnitHPChanged(int current, int max) => RefreshUnitInfo();
+    private void HandleUnitSPChanged(int sp) => RefreshUnitInfo();
+    private void HandleUnitStatusChanged() => RefreshUnitInfo();
+    private void HandleHandChanged(IReadOnlyList<SkillData> hand) => RefreshSkillCards();
 
     private void RefreshSkillCards()
     {
@@ -194,11 +237,6 @@ public class BattleUI : MonoBehaviour
                 cards[i].gameObject.SetActive(false);
             }
         }
-    }
-
-    private void Update()
-    {
-        RefreshUnitInfo();
     }
 
     private void ApplyPresentationMode()

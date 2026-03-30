@@ -57,6 +57,12 @@ public class Unit : MonoBehaviour
     private SkillDeck _deck;
     public SkillDeck Deck => _deck;
 
+    public System.Action<int, int> OnHPChanged;
+    public System.Action<int> OnSPChanged;
+    public System.Action<int> OnShieldChanged;
+    public System.Action<bool, int> OnStaggerChanged;
+    public System.Action OnStatusChanged;
+
     public void Initialize()
     {
         if (unitData == null)
@@ -78,13 +84,18 @@ public class Unit : MonoBehaviour
         var slots = SkillSlots;
         if (slots != null && slots.Length > 0)
             _deck = new SkillDeck(slots);
+
+        NotifyAll();
     }
 
     // ── SP 시스템 ──
 
     public void ChangeSP(int amount)
     {
-        _sp = Mathf.Clamp(_sp + amount, SP_MIN, SP_MAX);
+        int next = Mathf.Clamp(_sp + amount, SP_MIN, SP_MAX);
+        if (next == _sp) return;
+        _sp = next;
+        OnSPChanged?.Invoke(_sp);
     }
 
     public void OnClashWin()
@@ -112,6 +123,7 @@ public class Unit : MonoBehaviour
     {
         _shield += Mathf.Max(0, amount);
         Debug.Log($"[Shield] {UnitName} 방어막 +{amount} (총 {_shield})");
+        OnShieldChanged?.Invoke(_shield);
     }
 
     /// <summary>
@@ -121,6 +133,7 @@ public class Unit : MonoBehaviour
     {
         if (_shield > 0) Debug.Log($"[Shield] {UnitName} 방어막 {_shield} 소멸");
         _shield = 0;
+        OnShieldChanged?.Invoke(_shield);
     }
 
     public int TakeDamage(int damage)
@@ -161,9 +174,11 @@ public class Unit : MonoBehaviour
         {
             currentHP = 0;
             isAlive = false;
+            OnHPChanged?.Invoke(currentHP, MaxHP);
             return finalDamage;
         }
 
+        OnHPChanged?.Invoke(currentHP, MaxHP);
         CheckStagger();
         return finalDamage;
     }
@@ -203,6 +218,7 @@ public class Unit : MonoBehaviour
         _staggerTurnsLeft = 1;
         _staggerAppliedThisTurn = true;
         Debug.Log($"[Stagger] {UnitName} 흐트러짐 {_staggerCount}단계! (HP {ratio:P0} <= {nextThreshold:P0})");
+        OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
     }
 
     /// <summary>
@@ -224,6 +240,7 @@ public class Unit : MonoBehaviour
         {
             _isStaggered = false;
             Debug.Log($"[Stagger] {UnitName} 흐트러짐 회복!");
+            OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
         }
     }
 
@@ -244,6 +261,7 @@ public class Unit : MonoBehaviour
         {
             statusEffects.Add(new StatusEffect(type, potency, count));
         }
+        OnStatusChanged?.Invoke();
     }
 
     public StatusEffect GetStatus(StatusType type)
@@ -267,6 +285,7 @@ public class Unit : MonoBehaviour
         TakeDamage(damage);
 
         if (bleed.IsExpired) statusEffects.Remove(bleed);
+        OnStatusChanged?.Invoke();
         return damage;
     }
 
@@ -291,6 +310,7 @@ public class Unit : MonoBehaviour
 
         para.Consume(1);
         if (para.IsExpired) statusEffects.Remove(para);
+        OnStatusChanged?.Invoke();
     }
 
     /// <summary>
@@ -299,6 +319,16 @@ public class Unit : MonoBehaviour
     public void CleanupExpiredStatuses()
     {
         statusEffects.RemoveAll(s => s.IsExpired);
+        OnStatusChanged?.Invoke();
+    }
+
+    private void NotifyAll()
+    {
+        OnHPChanged?.Invoke(currentHP, MaxHP);
+        OnSPChanged?.Invoke(_sp);
+        OnShieldChanged?.Invoke(_shield);
+        OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
+        OnStatusChanged?.Invoke();
     }
 
     public bool HasStatus(StatusType type) => GetStatus(type) != null && !GetStatus(type).IsExpired;
