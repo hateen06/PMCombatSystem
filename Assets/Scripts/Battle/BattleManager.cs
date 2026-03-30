@@ -23,6 +23,8 @@ public class BattleManager : MonoBehaviour
     private int _selectedIndex = -1;
     private int _turnCount;
     private bool _isEvading;
+    private bool _isGuarding;
+    private int _guardCardIndex = -1; // Guard로 전환한 카드 인덱스
 
 
     public System.Action<string> OnLogMessage;
@@ -34,6 +36,7 @@ public class BattleManager : MonoBehaviour
     public System.Action<string> OnIntentUpdated;
     public System.Action<Unit, Unit> OnTargetPreviewUpdated;
     public System.Action OnHandDrawn;
+    public System.Action<int, SkillData> OnCardOverridden;
 
     public Unit Ally => allyUnit;
     public Unit Enemy => enemyUnit;
@@ -62,6 +65,24 @@ public class BattleManager : MonoBehaviour
         if (allyUnit.Deck == null) return;
         var hand = allyUnit.Deck.CurrentHand;
         if (index < 0 || index >= hand.Count) return;
+
+        // Guard로 전환된 카드를 다시 클릭하면 Guard 유지
+        if (_isGuarding && index == _guardCardIndex)
+        {
+            _selectedIndex = index;
+            Log("선택: " + _selectedSkill.skillName);
+            return;
+        }
+
+        // 다른 카드를 선택하면 Guard 해제
+        if (_isGuarding)
+        {
+            _isGuarding = false;
+            // 이전 Guard 카드 비주얼 복원
+            if (_guardCardIndex >= 0 && _guardCardIndex < hand.Count)
+                OnCardOverridden?.Invoke(_guardCardIndex, hand[_guardCardIndex]);
+            _guardCardIndex = -1;
+        }
 
         _selectedSkill = hand[index];
         _selectedIndex = index;
@@ -92,18 +113,94 @@ public class BattleManager : MonoBehaviour
 
     public void OnEvadeButton()
     {
-        if (_selectedIndex < 0) return;
+        if (_selectedIndex < 0 && !_isGuarding) return;
+
+        // Guard 상태에서 회피 누르면 Guard 해제 후 회피 진행
+        int evadeIndex = _isGuarding ? _guardCardIndex : _selectedIndex;
+        if (evadeIndex < 0) return;
+
+        CancelGuard();
+        _selectedIndex = evadeIndex;
         SelectEvade(_selectedIndex);
         ExecuteTurn();
+    }
+
+    public void OnGuardButton()
+    {
+        if (!_fsm.Is(BattleState.SkillSelect)) return;
+        if (_selectedIndex < 0 && !_isGuarding) { Log("[!] 카드를 먼저 선택하세요"); return; }
+
+        // 이미 Guard 상태면 토글 해제
+        if (_isGuarding)
+        {
+            CancelGuard();
+            return;
+        }
+
+        var guardSkill = FindGuardSkill();
+        if (guardSkill == null) { Log("[!] Guard 스킬 없음"); return; }
+
+        // 카드 비주얼을 Guard로 교체 (아직 턴 실행 안 함)
+        _isGuarding = true;
+        _guardCardIndex = _selectedIndex;
+        OnCardOverridden?.Invoke(_selectedIndex, guardSkill);
+
+        // 선택 상태를 Guard 스킬로 전환
+        _selectedSkill = guardSkill;
+        _isEvading = false;
+        Log($"[방어 준비] {allyUnit.UnitName} → 방어 태세 ({guardSkill.skillName})");
+    }
+
+    private void CancelGuard()
+    {
+        if (!_isGuarding) return;
+
+        // 원래 카드로 비주얼 복원
+        if (allyUnit.Deck != null && _guardCardIndex >= 0)
+        {
+            var hand = allyUnit.Deck.CurrentHand;
+            if (_guardCardIndex < hand.Count)
+            {
+                OnCardOverridden?.Invoke(_guardCardIndex, hand[_guardCardIndex]);
+                _selectedSkill = hand[_guardCardIndex];
+                _selectedIndex = _guardCardIndex;
+            }
+        }
+
+        _isGuarding = false;
+        _guardCardIndex = -1;
+        Log("[방어 해제]");
+    }
+
+    private SkillData FindGuardSkill()
+    {
+        var slots = allyUnit.SkillSlots;
+        if (slots == null) return null;
+        for (int i = 0; i < slots.Length; i++)
+            if (slots[i] != null && slots[i].skillType == SkillType.Defense)
+                return slots[i];
+        return null;
     }
 
     public void ExecuteTurn()
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
-        if (_selectedSkill == null && !_isEvading) { Log("[!] 스킬을 먼저 선택하세요"); return; }
+        if (_selectedSkill == null && !_isEvading && !_isGuarding) { Log("[!] 스킬을 먼저 선택하세요"); return; }
 
         // 선택 카드를 실제 덱에서 소모
-        if (allyUnit.Deck != null && _selectedIndex >= 0)
+        bool isGuarding = _isGuarding;
+        if (isGuarding)
+        {
+            // Guard: 전환한 카드를 소모
+            if (allyUnit.Deck != null && _guardCardIndex >= 0)
+                allyUnit.Deck.UseCard(_guardCardIndex);
+
+            // Shield 부여
+            int shieldPower = CoinCalculator.RollPower(_selectedSkill, _selectedSkill.coinCount, allyUnit.CoinHeadsChance);
+            allyUnit.ApplyShield(shieldPower);
+            Log($"[방어] {allyUnit.UnitName} 방어 발동! 방어막 {shieldPower} (코인 굴림)");
+        }
+        else if (allyUnit.Deck != null && _selectedIndex >= 0)
         {
             _selectedSkill = allyUnit.Deck.UseCard(_selectedIndex);
         }
@@ -125,7 +222,7 @@ public class BattleManager : MonoBehaviour
         Log("속도: " + allyUnit.UnitName + " " + allySpeed + " / " + enemyUnit.UnitName + " " + enemySpeed);
 
         var actions = new List<TurnAction>();
-        if (!allyUnit.IsStaggered && !_isEvading)
+        if (!allyUnit.IsStaggered && !_isEvading && !isGuarding)
             actions.Add(new TurnAction(allyUnit, _selectedSkill, enemyUnit, allySpeed));
         if (!enemyUnit.IsStaggered && enemySkill != null)
             actions.Add(new TurnAction(enemyUnit, enemySkill, allyUnit, enemySpeed));
@@ -183,9 +280,15 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        // 턴 종료: Shield 소멸
+        allyUnit.ClearShield();
+        enemyUnit.ClearShield();
+
         CheckBattleEnd();
         _selectedSkill = null;
         _isEvading = false;
+        _isGuarding = false;
+        _guardCardIndex = -1;
         _evadeSkill = null;
         if (_fsm.Is(BattleState.SkillSelect)) DrawNewHands();
     }

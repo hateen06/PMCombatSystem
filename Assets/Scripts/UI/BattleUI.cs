@@ -110,6 +110,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnIntentUpdated += UpdateIntent;
         battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
         battleManager.OnHandDrawn += RefreshSkillCards;
+        battleManager.OnCardOverridden += OnCardOverridden;
     }
 
     private void OnDisable()
@@ -123,6 +124,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnIntentUpdated -= UpdateIntent;
         battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
         battleManager.OnHandDrawn -= RefreshSkillCards;
+        battleManager.OnCardOverridden -= OnCardOverridden;
     }
 
     private void RefreshSkillCards()
@@ -322,6 +324,13 @@ public class BattleUI : MonoBehaviour
 
         Color color = isAlly ? Color.red : Color.yellow;
         popup.Setup(damage, color);
+    }
+
+    private void OnCardOverridden(int cardIndex, SkillData newSkill)
+    {
+        if (skillCards == null || cardIndex < 0 || cardIndex >= skillCards.Length) return;
+        if (skillCards[cardIndex] != null)
+            skillCards[cardIndex].Setup(newSkill);
     }
 
     // ── 버튼에서 호출 (Inspector OnClick에 연결) ──

@@ -8,6 +8,7 @@ public class Unit : MonoBehaviour
     private int currentHP;
     private bool isAlive;
     private int _sp;
+    private int _shield;
     private readonly List<StatusEffect> statusEffects = new List<StatusEffect>();
 
     // ── SP 상수 (림버스 규칙) ──
@@ -26,6 +27,7 @@ public class Unit : MonoBehaviour
     public SkillData[] SkillSlots => unitData != null ? unitData.skillSlot : null;
     public int SP => _sp;
     public bool IsPanicked => _sp <= SP_PANIC_THRESHOLD;
+    public int Shield => _shield;
 
     // ── Stagger ──
     private bool _isStaggered;
@@ -58,6 +60,7 @@ public class Unit : MonoBehaviour
         currentHP = unitData.maxHP;
         isAlive = true;
         _sp = 0;
+        _shield = 0;
         _isStaggered = false;
         _staggerTurnsLeft = 0;
         _staggerAppliedThisTurn = false;
@@ -96,6 +99,26 @@ public class Unit : MonoBehaviour
         return Random.Range(unitData.minSpeed, unitData.maxSpeed + 1);
     }
 
+    // ── Shield(방어) 시스템 ──
+
+    /// <summary>
+    /// Guard 스킬 발동 시 Shield HP 부여. 코인 굴림 결과만큼.
+    /// </summary>
+    public void ApplyShield(int amount)
+    {
+        _shield += Mathf.Max(0, amount);
+        Debug.Log($"[Shield] {UnitName} 방어막 +{amount} (총 {_shield})");
+    }
+
+    /// <summary>
+    /// 턴 종료 시 잔여 Shield 소멸.
+    /// </summary>
+    public void ClearShield()
+    {
+        if (_shield > 0) Debug.Log($"[Shield] {UnitName} 방어막 {_shield} 소멸");
+        _shield = 0;
+    }
+
     public int TakeDamage(int damage)
     {
         return TakeDamage(damage, DamageType.Slash);
@@ -109,6 +132,16 @@ public class Unit : MonoBehaviour
 
         // 피해 타입 저항 × 흐트러짐 배율
         int finalDamage = Mathf.RoundToInt(damage * resist * DamageMultiplier);
+
+        // Shield 흡수
+        if (_shield > 0)
+        {
+            int absorbed = Mathf.Min(_shield, finalDamage);
+            _shield -= absorbed;
+            finalDamage -= absorbed;
+            Debug.Log($"[Shield] {UnitName} 방어막이 {absorbed} 흡수 (잔여 {_shield})");
+        }
+
         currentHP -= finalDamage;
 
         if (currentHP <= 0)

@@ -25,3 +25,13 @@
 /[Aa]ssets/Plugins/Editor/JetBrains*
 .vs/
 .idea/
+
+# 백업/복구 씬
+Assets/Scenes/backup.unity
+Assets/Scenes/backup.unity.meta
+
+# 삭제된 MCP 패키지 잔재
+ProjectSettings/McpUnitySettings.json
+
+# 폰트 아틀라스 (바이너리, 로컬 빌드 산출물)
+Assets/Fonts/MALGUN SDF.asset
