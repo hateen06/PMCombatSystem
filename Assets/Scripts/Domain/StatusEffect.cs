@@ -12,6 +12,7 @@ public class StatusEffect
     public StatusType type;
     public int potency;
     public int count;
+    public string DisplayName => StatusNames.ToKorean(type);
 
     public StatusEffect(StatusType type, int potency, int count)
     {
