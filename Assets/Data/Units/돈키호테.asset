@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5594a9260fec3f04a8e92b997391ba04, type: 3}
+  m_Name: "\uB3C8\uD0A4\uD638\uD14C"
+  m_EditorClassIdentifier: 
+  unitName: "\uB3C8\uD0A4\uD638\uD14C"
+  maxHP: 160
+  minSpeed: 2
+  maxSpeed: 4
+  skillSlot:
+  - {fileID: 11400000, guid: 3502780fdf658ef45b44c03da56c59a6, type: 2}
+  - {fileID: 11400000, guid: d03f026ee74199f449aa49724c14087d, type: 2}
+  - {fileID: 11400000, guid: 26d6d214004cf3d4f9382de1cfcd30da, type: 2}
+  - {fileID: 11400000, guid: f4b72f19fbd355845985942a6bff8f9e, type: 2}
+  slashResist: 2
+  pierceResist: 0.5
+  bluntResist: 1
+  staggerThreshold1: 0.6
+  staggerThreshold2: 0.3
+  staggerThreshold3: 0.15
+  level: 15
+  baseHP: 130
+  hpPerLevel: 8.5
+  offenseMod: -1
+  defenseMod: 1

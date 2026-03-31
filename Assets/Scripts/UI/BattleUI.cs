@@ -34,6 +34,7 @@ public class BattleUI : MonoBehaviour
     [Header("스킬 카드")]
     [SerializeField] private SkillCardUI[] skillCards;       // 아군1 카드
     [SerializeField] private SkillCardUI[] skillCards2;      // 아군2 카드
+    [SerializeField] private SkillCardUI[] skillCards3;      // 아군3 카드
     [SerializeField] private Button executeButton;
 
     [Header("데미지 팝업")]
@@ -100,9 +101,24 @@ public class BattleUI : MonoBehaviour
                 if (btn != null)
                     btn.onClick.AddListener(() => OnSkillCard2Clicked(index));
 
-                // 우클릭 → 회피 (아군2 = 파우스트)
                 int rIdx2 = i;
                 skillCards2[i].OnRightClicked = () => OnSkillCardRightClicked(1, rIdx2);
+            }
+        }
+
+        // 아군3 스킬 카드 초기화
+        if (skillCards3 != null && skillCards3.Length > 0 && battleManager != null)
+        {
+            for (int i = 0; i < skillCards3.Length; i++)
+            {
+                if (skillCards3[i] == null) continue;
+                int index = i;
+                var btn = skillCards3[i].GetComponentInChildren<Button>();
+                if (btn != null)
+                    btn.onClick.AddListener(() => OnSkillCard3Clicked(index));
+
+                int rIdx3 = i;
+                skillCards3[i].OnRightClicked = () => OnSkillCardRightClicked(2, rIdx3);
             }
         }
 
@@ -152,6 +168,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
         battleManager.OnCardOverridden2 += OnCardOverridden2;
+        battleManager.OnCardOverridden3 += OnCardOverridden3;
         BindObservedData();
     }
 
@@ -172,6 +189,7 @@ public class BattleUI : MonoBehaviour
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
         battleManager.OnCardOverridden2 -= OnCardOverridden2;
+        battleManager.OnCardOverridden3 -= OnCardOverridden3;
         UnbindObservedData();
     }
 
@@ -305,13 +323,17 @@ public class BattleUI : MonoBehaviour
 
     private void RefreshSkillCards()
     {
-        // 아군1 카드
         RefreshCardSet(skillCards, battleManager?.Ally);
-        // 아군2 카드
+
         Unit ally2 = null;
         if (battleManager != null && battleManager.AllyUnits != null && battleManager.AllyUnits.Count > 1)
             ally2 = battleManager.AllyUnits[1];
         RefreshCardSet(skillCards2, ally2);
+
+        Unit ally3 = null;
+        if (battleManager != null && battleManager.AllyUnits != null && battleManager.AllyUnits.Count > 2)
+            ally3 = battleManager.AllyUnits[2];
+        RefreshCardSet(skillCards3, ally3);
     }
 
     private void RefreshCardSet(SkillCardUI[] cards, Unit unit)
@@ -465,6 +487,12 @@ public class BattleUI : MonoBehaviour
         if (skillCards != null)
             foreach (var card in skillCards)
                 if (card != null) card.SetInteractable(canInteract);
+        if (skillCards2 != null)
+            foreach (var card in skillCards2)
+                if (card != null) card.SetInteractable(canInteract);
+        if (skillCards3 != null)
+            foreach (var card in skillCards3)
+                if (card != null) card.SetInteractable(canInteract);
 
         // 레거시 버튼
         if (skillButtons != null)
@@ -490,6 +518,12 @@ public class BattleUI : MonoBehaviour
 
             if (skillCards != null)
                 foreach (var card in skillCards)
+                    if (card != null) card.SetSelected(false);
+            if (skillCards2 != null)
+                foreach (var card in skillCards2)
+                    if (card != null) card.SetSelected(false);
+            if (skillCards3 != null)
+                foreach (var card in skillCards3)
                     if (card != null) card.SetSelected(false);
         }
     }
@@ -585,13 +619,22 @@ public class BattleUI : MonoBehaviour
 
     private void OnSkillCard2Clicked(int index)
     {
-        // 아군2 카드 선택 시각 피드백
         if (skillCards2 != null)
             for (int i = 0; i < skillCards2.Length; i++)
                 if (skillCards2[i] != null)
                     skillCards2[i].SetSelected(i == index);
 
         battleManager?.SelectSkillForUnit(1, index);
+    }
+
+    private void OnSkillCard3Clicked(int index)
+    {
+        if (skillCards3 != null)
+            for (int i = 0; i < skillCards3.Length; i++)
+                if (skillCards3[i] != null)
+                    skillCards3[i].SetSelected(i == index);
+
+        battleManager?.SelectSkillForUnit(2, index);
     }
 
     private void OnCardOverridden(int cardIndex, SkillData newSkill)
@@ -606,6 +649,13 @@ public class BattleUI : MonoBehaviour
         if (skillCards2 != null && cardIndex >= 0 && cardIndex < skillCards2.Length)
             if (skillCards2[cardIndex] != null)
                 skillCards2[cardIndex].Setup(newSkill);
+    }
+
+    private void OnCardOverridden3(int cardIndex, SkillData newSkill)
+    {
+        if (skillCards3 != null && cardIndex >= 0 && cardIndex < skillCards3.Length)
+            if (skillCards3[cardIndex] != null)
+                skillCards3[cardIndex].Setup(newSkill);
     }
 
     // ── 버튼에서 호출 (Inspector OnClick에 연결) ──

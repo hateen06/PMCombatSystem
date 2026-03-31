@@ -41,6 +41,7 @@ public class BattleManager : MonoBehaviour
     public System.Action OnHandDrawn;
     public System.Action<int, SkillData> OnCardOverridden;
     public System.Action<int, SkillData> OnCardOverridden2;
+    public System.Action<int, SkillData> OnCardOverridden3;
     public System.Action<Unit, Unit> OnTargetAssigned;
 
     // ── 내부 상태 ──
@@ -192,7 +193,11 @@ public class BattleManager : MonoBehaviour
                 SkillData orig = _sel.unitOriginalSkill.ContainsKey(unitIndex) ? _sel.unitOriginalSkill[unitIndex] : null;
                 if (orig == null && unit.Deck != null && cardIndex < unit.Deck.CurrentHand.Count)
                     orig = unit.Deck.CurrentHand[cardIndex];
-                if (orig != null) OnCardOverridden2?.Invoke(cardIndex, orig);
+                if (orig != null)
+                {
+                    if (unitIndex == 1) OnCardOverridden2?.Invoke(cardIndex, orig);
+                    else if (unitIndex == 2) OnCardOverridden3?.Invoke(cardIndex, orig);
+                }
                 _sel.unitSelectedSkills.Remove(unitIndex);
             }
             Log($"[해제] {unit.UnitName} → 공격 복귀");
@@ -232,7 +237,8 @@ public class BattleManager : MonoBehaviour
                 _sel.unitOriginalSkill[unitIndex] = hand[cardIndex];
             _sel.unitSelectedSkills[unitIndex] = defSkill;
             _sel.unitSelectedIndices[unitIndex] = cardIndex;
-            OnCardOverridden2?.Invoke(cardIndex, defSkill);
+            if (unitIndex == 1) OnCardOverridden2?.Invoke(cardIndex, defSkill);
+            else if (unitIndex == 2) OnCardOverridden3?.Invoke(cardIndex, defSkill);
             Log($"[{(defSkill.skillType == SkillType.Defense ? "방어" : "회피")}] {unit.UnitName} → {defSkill.skillName}");
         }
     }
