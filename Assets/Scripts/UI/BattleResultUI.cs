@@ -3,12 +3,6 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 using DG.Tweening;
-
-/// <summary>
-/// 승/패 결과 화면.
-/// CanvasGroup으로 페이드인 — SetActive(false)로 숨기면
-/// OnEnable 이벤트 구독이 안 되므로 alpha로 제어.
-/// </summary>
 public class BattleResultUI : MonoBehaviour
 {
     [SerializeField] private CanvasGroup canvasGroup;

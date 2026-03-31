@@ -1,18 +1,10 @@
 using UnityEngine;
 using System.Collections.Generic;
-
-/// <summary>
-/// 전투 UI 텍스트 생성 담당.
-/// Preview, Intent, Breakdown 문자열을 만들어 이벤트로 전달.
-/// BattleManager가 직접 문자열을 조립하던 책임을 분리.
-/// </summary>
 public class BattlePresenter
 {
     public System.Action<string> OnBreakdownUpdated;
     public System.Action<string> OnClashPreviewUpdated;
     public System.Action<string> OnIntentUpdated;
-
-    /// <summary>스킬 선택 시 합 미리보기 + 의도 텍스트 갱신</summary>
     public void UpdateClashPreview(SkillData allySkill, Unit ally, Unit enemy)
     {
         if (allySkill == null || enemy == null)
@@ -65,8 +57,6 @@ public class BattlePresenter
         OnClashPreviewUpdated?.Invoke(preview);
         OnIntentUpdated?.Invoke(intent);
     }
-
-    /// <summary>피격 시 Breakdown 텍스트 생성</summary>
     public void UpdateBreakdown(Unit target, int finalDamage, DamageType damageType)
     {
         if (finalDamage <= 0) return;

@@ -34,13 +34,7 @@ public class UnitData : ScriptableObject
 
     [Tooltip("DefenseLevel = level + defenseMod")]
     public int defenseMod = 0;
-
-    /// <summary>레벨 기반 최대 HP</summary>
     public int LevelHP => Mathf.RoundToInt(baseHP + level * hpPerLevel);
-
-    /// <summary>레벨 기반 공격 레벨</summary>
     public int OffenseLevel => level + offenseMod;
-
-    /// <summary>레벨 기반 방어 레벨</summary>
     public int DefenseLevel => level + defenseMod;
 }

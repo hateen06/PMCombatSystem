@@ -2,11 +2,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 전투 검증용 런타임 디버그 패널.
-/// HP / SP / 상태이상 / 흐트러짐을 빠르게 재현하는 용도.
-/// 포트폴리오에서 "검증 가능한 시스템"이라는 신호를 주기 위한 개발자 도구.
-/// </summary>
 public class BattleDebugPanel : MonoBehaviour
 {
     [SerializeField] private BattleManager battleManager;
@@ -20,10 +15,48 @@ public class BattleDebugPanel : MonoBehaviour
             root.SetActive(showOnStart);
     }
 
-    private void Update()
+    private void OnEnable()
     {
+        if (battleManager == null) return;
+        var ally = battleManager.Ally;
+        var enemy = battleManager.Enemy;
+        if (ally != null)
+        {
+            ally.OnHPChanged += OnDataChanged;
+            ally.OnSPChanged += OnSPChanged;
+            ally.OnStaggerChanged += OnStaggerChanged;
+        }
+        if (enemy != null)
+        {
+            enemy.OnHPChanged += OnDataChanged;
+            enemy.OnSPChanged += OnSPChanged;
+            enemy.OnStaggerChanged += OnStaggerChanged;
+        }
         RefreshSummary();
     }
+
+    private void OnDisable()
+    {
+        if (battleManager == null) return;
+        var ally = battleManager.Ally;
+        var enemy = battleManager.Enemy;
+        if (ally != null)
+        {
+            ally.OnHPChanged -= OnDataChanged;
+            ally.OnSPChanged -= OnSPChanged;
+            ally.OnStaggerChanged -= OnStaggerChanged;
+        }
+        if (enemy != null)
+        {
+            enemy.OnHPChanged -= OnDataChanged;
+            enemy.OnSPChanged -= OnSPChanged;
+            enemy.OnStaggerChanged -= OnStaggerChanged;
+        }
+    }
+
+    private void OnDataChanged(int a, int b) => RefreshSummary();
+    private void OnSPChanged(int sp) => RefreshSummary();
+    private void OnStaggerChanged(bool s, int c) => RefreshSummary();
 
     private void RefreshSummary()
     {
@@ -41,12 +74,10 @@ public class BattleDebugPanel : MonoBehaviour
 
     public void AllyDamage10() => battleManager?.Ally?.TakeDamage(10, DamageType.Slash);
     public void EnemyDamage10() => battleManager?.Enemy?.TakeDamage(10, DamageType.Slash);
-
     public void AllySPPlus10() => battleManager?.Ally?.ChangeSP(10);
     public void AllySPMinus10() => battleManager?.Ally?.ChangeSP(-10);
     public void EnemySPPlus10() => battleManager?.Enemy?.ChangeSP(10);
     public void EnemySPMinus10() => battleManager?.Enemy?.ChangeSP(-10);
-
     public void AllyBleed() => battleManager?.Ally?.AddStatus(StatusType.Bleed, 3, 2);
     public void EnemyBleed() => battleManager?.Enemy?.AddStatus(StatusType.Bleed, 3, 2);
     public void AllyParalysis() => battleManager?.Ally?.AddStatus(StatusType.Paralysis, 2, 1);
@@ -55,19 +86,18 @@ public class BattleDebugPanel : MonoBehaviour
     public void ForceEnemyStagger()
     {
         var enemy = battleManager?.Enemy;
-        if (enemy == null) return;
-        enemy.TakeDamage(Mathf.CeilToInt(enemy.CurrentHP * 0.6f), DamageType.Blunt);
+        if (enemy != null) enemy.TakeDamage(Mathf.CeilToInt(enemy.CurrentHP * 0.6f), DamageType.Blunt);
     }
 
     public void ForceAllyStagger()
     {
         var ally = battleManager?.Ally;
-        if (ally == null) return;
-        ally.TakeDamage(Mathf.CeilToInt(ally.CurrentHP * 0.6f), DamageType.Blunt);
+        if (ally != null) ally.TakeDamage(Mathf.CeilToInt(ally.CurrentHP * 0.6f), DamageType.Blunt);
     }
 
     public void RestartBattle()
     {
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
     }
 }

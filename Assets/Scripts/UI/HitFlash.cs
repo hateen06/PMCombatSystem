@@ -1,10 +1,6 @@
 using System.Collections;
 using UnityEngine;
 using DG.Tweening;
-
-/// <summary>
-/// 피격 시 스프라이트 깜빡임 + 빨간 틴트 효과.
-/// </summary>
 public class HitFlash : MonoBehaviour
 {
     [SerializeField] private SpriteRenderer spriteRenderer;

@@ -4,7 +4,8 @@ public enum SkillType
 {
     Attack,
     Defense,
-    Evade
+    Evade,
+    EGO
 }
 
 public enum DamageType
@@ -27,6 +28,9 @@ public class SkillData : ScriptableObject
 
     [Header("상태이상 부여")]
     public StatusType inflictStatus;
-    public int statusPotency;   // 위력
-    public int statusCount;     // 횟수
+    public int statusPotency;
+    public int statusCount;
+
+    [Header("E.G.O")]
+    public int egoCost;
 }

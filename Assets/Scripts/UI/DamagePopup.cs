@@ -1,11 +1,6 @@
 using UnityEngine;
 using TMPro;
 using DG.Tweening;
-
-/// <summary>
-/// 데미지 숫자가 떠오르며 사라지는 팝업.
-/// DOTween 사용으로 부드러운 연출.
-/// </summary>
 public class DamagePopup : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI damageText;

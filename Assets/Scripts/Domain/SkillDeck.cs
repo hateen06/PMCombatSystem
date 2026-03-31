@@ -1,11 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-
-/// <summary>
-/// 림버스 스킬 덱 시스템.
-/// 스킬1 x3, 스킬2 x2, 스킬3 x1 = 6장.
-/// 매 턴 2장 뽑아서 선택지 제공, 다 쓰면 리필.
-/// </summary>
 public class SkillDeck
 {
     private readonly SkillData[] _allSkills;
@@ -19,21 +13,11 @@ public class SkillDeck
 
     public SkillDeck(SkillData skill1, SkillData skill2, SkillData skill3)
         : this(new[] { skill1, skill2, skill3 }) { }
-
-    /// <summary>
-    /// 전체 skillSlot 배열로 초기화.
-    /// 공격: 스킬1 x3 + 스킬2 x2 + 스킬3 x1
-    /// 방어/회피: 각 1장
-    /// </summary>
     public SkillDeck(SkillData[] skills)
     {
         _allSkills = skills ?? new SkillData[0];
         Refill();
     }
-
-    /// <summary>
-    /// 덱 리필: 공격 스킬은 3/2/1 비율, 방어/회피는 1장씩
-    /// </summary>
     public void Refill()
     {
         _drawPile.Clear();
@@ -56,10 +40,6 @@ public class SkillDeck
 
         Shuffle();
     }
-
-    /// <summary>
-    /// 매 턴 호출: 2장 뽑아서 핸드에 올림.
-    /// </summary>
     public void DrawHand(int count = 2)
     {
         _currentHand.Clear();
@@ -75,11 +55,6 @@ public class SkillDeck
 
         OnHandChanged?.Invoke(CurrentHand);
     }
-
-    /// <summary>
-    /// 선택한 스킬을 핸드에서 제거.
-    /// 림버스 방식: 사용한 카드만 소모, 안 쓴 카드는 그대로 남음.
-    /// </summary>
     public SkillData UseCard(int handIndex)
     {
         if (handIndex < 0 || handIndex >= _currentHand.Count)

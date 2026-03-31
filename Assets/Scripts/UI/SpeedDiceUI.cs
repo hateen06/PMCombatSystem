@@ -1,12 +1,6 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-
-/// <summary>
-/// 유닛 머리 위에 속도 다이스(숫자 배지) 표시.
-/// 1차는 TMP 숫자 + 배경 이미지로 구성하고,
-/// 이후 스프라이트만 교체하면 림버스풍으로 확장 가능.
-/// </summary>
 public class SpeedDiceUI : MonoBehaviour
 {
     [SerializeField] private RectTransform root;

@@ -2,12 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
-
-/// <summary>
-/// 개별 스킬 카드 UI.
-/// 스킬 데이터를 받아서 카드 형태로 표시.
-/// 우클릭 시 방어/회피 전환.
-/// </summary>
 public class SkillCardUI : MonoBehaviour, IPointerClickHandler
 {
     [Header("카드 요소")]
@@ -19,6 +13,7 @@ public class SkillCardUI : MonoBehaviour, IPointerClickHandler
     [SerializeField] private TextMeshProUGUI coinInfoText;
     [SerializeField] private TextMeshProUGUI typeText;
     [SerializeField] private TextMeshProUGUI damageTypeText;
+    [SerializeField] private TextMeshProUGUI powerRangeText;
     [SerializeField] private Button cardButton;
 
     [Header("색상")]
@@ -30,8 +25,6 @@ public class SkillCardUI : MonoBehaviour, IPointerClickHandler
 
     private SkillData _skillData;
     private bool _isSelected;
-
-    /// <summary>우클릭 시 호출되는 콜백 (외부에서 등록)</summary>
     public System.Action OnRightClicked;
 
     public void Setup(SkillData skill)
@@ -42,6 +35,13 @@ public class SkillCardUI : MonoBehaviour, IPointerClickHandler
         if (skillNameText != null) skillNameText.text = skill.skillName;
         if (powerText != null) powerText.text = skill.basePower.ToString();
         if (coinInfoText != null) coinInfoText.text = $"x{skill.coinCount} (+{skill.coinPower})";
+
+        if (powerRangeText != null)
+        {
+            int min = skill.basePower;
+            int max = skill.basePower + skill.coinCount * skill.coinPower;
+            powerRangeText.text = $"{min}~{max}";
+        }
         if (artworkImage != null)
         {
             artworkImage.sprite = skill.cardArtwork;
@@ -89,6 +89,32 @@ public class SkillCardUI : MonoBehaviour, IPointerClickHandler
         _isSelected = selected;
         if (cardBorder != null)
             cardBorder.color = selected ? selectedBorderColor : normalBorderColor;
+
+        float targetScale = selected ? 1.08f : 1f;
+        float targetY = selected ? 18f : 0f;
+        float targetAlpha = selected ? 1f : 0.86f;
+
+        transform.localScale = Vector3.one * targetScale;
+
+        var rt = GetComponent<RectTransform>();
+        if (rt != null)
+        {
+            var pos = rt.anchoredPosition;
+            pos.y = _baseY + targetY;
+            rt.anchoredPosition = pos;
+        }
+
+        var cg = GetComponent<CanvasGroup>();
+        if (cg == null) cg = gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = targetAlpha;
+    }
+
+    private float _baseY;
+
+    private void Awake()
+    {
+        var rt = GetComponent<RectTransform>();
+        if (rt != null) _baseY = rt.anchoredPosition.y;
     }
 
     public void SetInteractable(bool interactable)

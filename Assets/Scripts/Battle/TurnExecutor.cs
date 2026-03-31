@@ -1,11 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
-
-/// <summary>
-/// 턴 결과 실행 담당.
-/// 합/일방공격/회피 판정 → DamageProcessor 호출 → 피격 연출.
-/// </summary>
 public class TurnExecutor
 {
     private readonly List<Unit> _allyUnits;
@@ -30,8 +25,6 @@ public class TurnExecutor
         _cameraShake = cameraShake;
         _presenter = presenter;
     }
-
-    /// <summary>일방 공격 처리</summary>
     public void ExecuteUnopposed(TurnAction action)
     {
         if (!action.actor.IsAlive || !action.target.IsAlive) return;
@@ -58,8 +51,6 @@ public class TurnExecutor
             Log($"  [{action.skill.inflictStatus}] {action.target.UnitName}에게 부여");
         }
     }
-
-    /// <summary>회피 판정 후 피해 처리</summary>
     public void ExecuteEvade(TurnAction action, SkillData evadeSkill, Unit evader)
     {
         int paraCoins = action.actor.GetParalyzedCoins();
@@ -84,8 +75,20 @@ public class TurnExecutor
         Log($"[회피 실패] 관통 피해 {evadeResult.finalDamage} (공격 {attackPower} - 회피 {evadePower})");
         ApplyHitEffects(action.target, evadeResult.finalDamage, action.skill.damageType);
     }
+    public void ApplyClashSideEffects(ClashResult clash, Unit attacker, Unit defender)
+    {
+        var winner = clash.winnerIsAttacker ? attacker : defender;
+        if (clash.winnerSPChange != 0)
+            winner.ChangeSP(clash.winnerSPChange);
 
-    /// <summary>합 피해 처리</summary>
+        foreach (var sa in clash.statusApplications)
+        {
+            var target = sa.applyToAttacker ? attacker : defender;
+            target.AddStatus(sa.type, sa.potency, sa.count);
+            Log($"  [{sa.type}] {target.UnitName}에게 부여");
+        }
+    }
+
     public void ExecuteClashDamage(ClashResult clash, Unit ally, Unit enemy)
     {
         if (clash.outcome == ClashOutcome.AttackerWin)
@@ -147,9 +150,9 @@ public class TurnExecutor
             Log($"  >> {target.UnitName} 흐트러짐 발생!");
     }
 
-    public void PlayAttackSequence(Unit attacker, Unit target)
+    public Sequence PlayAttackSequence(Unit attacker, Unit target)
     {
-        if (attacker == null || target == null) return;
+        if (attacker == null || target == null) return null;
 
         var attackerTr = attacker.transform;
         var targetTr = target.transform;
@@ -168,6 +171,7 @@ public class TurnExecutor
         seq.Append(targetTr.DOMove(targetStart + recoilStep, 0.08f).SetEase(Ease.OutQuad));
         seq.Append(targetTr.DOMove(targetStart, 0.10f).SetEase(Ease.InQuad));
         seq.Join(attackerTr.DOMove(attackerStart, 0.16f).SetEase(Ease.InOutQuad));
+        return seq;
     }
 
     private void Log(string msg) => OnLogMessage?.Invoke(msg);

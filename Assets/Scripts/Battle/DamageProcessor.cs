@@ -1,19 +1,4 @@
 using UnityEngine;
-
-/// <summary>
-/// 피해 계산 일원화.
-/// 모든 공격 경로(일방/합/회피실패)가 이 파이프라인을 거쳐서 최종 피해를 산출.
-/// 
-/// 파이프라인:
-///   1. 코인 굴림 → 기본 위력
-///   2. 마비 보정 → 코인 무효화
-///   3. 출혈 소모 → 공격자 자기 피해
-///   4. 레벨 보정 → diff / (|diff| + 25)
-///   5. 저항 보정 → damageType별 배율
-///   6. 흐트러짐 보정 → 1.5배
-///   7. Shield 흡수
-///   8. HP 차감
-/// </summary>
 public static class DamageProcessor
 {
     public struct DamageContext
@@ -35,10 +20,6 @@ public static class DamageProcessor
         public float resistMod;        // 저항 배율
         public bool wasStaggered;      // 흐트러짐 상태였는지
     }
-
-    /// <summary>
-    /// 통합 피해 처리. 모든 공격 경로가 이걸 호출.
-    /// </summary>
     public static DamageResult Process(DamageContext ctx)
     {
         var result = new DamageResult();
@@ -81,6 +62,15 @@ public static class DamageProcessor
         {
             result.levelMod = 1f;
         }
+
+        // 진동: 피격 시 추가 피해
+        int tremorBonus = ctx.target.GetTremorBonus();
+        damage += tremorBonus;
+
+        // 파열: 피격 시 위력만큼 추가 피해
+        int ruptureBonus = ctx.target.GetRuptureBonus();
+        damage += ruptureBonus;
+        if (ruptureBonus > 0) ctx.target.TickRupture();
 
         DamageType dmgType = ctx.skill != null ? ctx.skill.damageType : DamageType.Slash;
         result.finalDamage = ctx.target.TakeDamage(damage, dmgType, offLv);

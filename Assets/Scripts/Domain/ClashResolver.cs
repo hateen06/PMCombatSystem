@@ -1,112 +1,64 @@
 public static class ClashResolver
 {
     public static ClashResult Resolve(
-        Unit attacker, SkillData attackerSkill,
-        Unit defender, SkillData defenderSkill,
-        int attackerSpeed, int defenderSpeed)
+        string atkName, SkillData atkSkill, int atkHeadsChance, int atkSpeed,
+        string defName, SkillData defSkill, int defHeadsChance, int defSpeed)
     {
-        ClashResult result = new ClashResult();
-        result.attackerSkill = attackerSkill;
-        result.defenderSkill = defenderSkill;
+        var result = new ClashResult();
+        result.attackerSkill = atkSkill;
+        result.defenderSkill = defSkill;
 
-        if (attacker == null || defender == null ||
-            attackerSkill == null || defenderSkill == null)
+        if (atkSkill == null || defSkill == null)
         {
             result.outcome = ClashOutcome.Draw;
-            result.log = "※ 전투 정보 오류";
+            result.log = "전투 정보 오류";
             return result;
         }
 
-        int attackerCoins = attackerSkill.coinCount;
-        int defenderCoins = defenderSkill.coinCount;
+        int atkCoins = atkSkill.coinCount;
+        int defCoins = defSkill.coinCount;
 
-        // 코인 합 (클래시) — 코인마다 출혈 소모
-        while (attackerCoins > 0 && defenderCoins > 0)
+        while (atkCoins > 0 && defCoins > 0)
         {
-            // 출혈 처리: 공격 측이 코인 사용 시 출혈 1회 소모
-            int atkBleed = attacker.ConsumeBleed(1);
-            if (atkBleed > 0)
-                result.log += $" | {attacker.UnitName} 출혈 -{atkBleed}";
-            if (!attacker.IsAlive) break;
+            int atkPower = CoinCalculator.RollPower(atkSkill, 1, atkHeadsChance);
+            int defPower = CoinCalculator.RollPower(defSkill, 1, defHeadsChance);
 
-            int defBleed = defender.ConsumeBleed(1);
-            if (defBleed > 0)
-                result.log += $" | {defender.UnitName} 출혈 -{defBleed}";
-            if (!defender.IsAlive) break;
-
-            int attackerPower = CoinCalculator.RollPower(attackerSkill, 1, attacker.CoinHeadsChance);
-            int defenderPower = CoinCalculator.RollPower(defenderSkill, 1, defender.CoinHeadsChance);
-
-            if (attackerPower > defenderPower)
-                defenderCoins--;
-            else if (defenderPower > attackerPower)
-                attackerCoins--;
+            if (atkPower > defPower) defCoins--;
+            else if (defPower > atkPower) atkCoins--;
             else
             {
-                // 동점 → 속도로 결정
-                if (attackerSpeed >= defenderSpeed)
-                    defenderCoins--;
-                else
-                    attackerCoins--;
+                if (atkSpeed >= defSpeed) defCoins--;
+                else atkCoins--;
             }
         }
 
-        // 출혈로 사망 체크
-        if (!attacker.IsAlive && !defender.IsAlive)
-        {
-            result.outcome = ClashOutcome.Draw;
-            result.damage = 0;
-            result.log += " | 양측 출혈 사망";
-            return result;
-        }
-        if (!attacker.IsAlive)
-        {
-            result.outcome = ClashOutcome.DefenderWin;
-            result.damage = 0;
-            result.log += $" | {attacker.UnitName} 출혈 사망";
-            return result;
-        }
-        if (!defender.IsAlive)
+        if (atkCoins > 0)
         {
             result.outcome = ClashOutcome.AttackerWin;
-            result.damage = 0;
-            result.log += $" | {defender.UnitName} 출혈 사망";
-            return result;
+            result.winnerIsAttacker = true;
+            result.damage = CoinCalculator.RollPower(atkSkill, atkCoins, atkHeadsChance);
+            result.winnerSPChange = 10;
+            result.log = $"{atkName} 클래시 승리! 피해 {result.damage}";
+
+            if (atkSkill.statusPotency > 0 && atkSkill.statusCount > 0)
+                result.statusApplications.Add(new StatusApplication {
+                    applyToAttacker = false, type = atkSkill.inflictStatus,
+                    potency = atkSkill.statusPotency, count = atkSkill.statusCount
+                });
         }
-
-        // 승패 결정
-        if (attackerCoins > 0)
-        {
-            result.outcome = ClashOutcome.AttackerWin;
-            result.damage = CoinCalculator.RollPower(attackerSkill, attackerCoins, attacker.CoinHeadsChance);
-            result.log = $"{attacker.UnitName} 클래시 승리! 피해 {result.damage}";
-
-            // SP 변동: 승자 +10
-            attacker.OnClashWin();
-
-            // 상태이상 부여
-            if (attackerSkill.statusPotency > 0 && attackerSkill.statusCount > 0)
-            {
-                defender.AddStatus(attackerSkill.inflictStatus,
-                    attackerSkill.statusPotency, attackerSkill.statusCount);
-                result.log += $" | {attackerSkill.inflictStatus} +{attackerSkill.statusPotency}/{attackerSkill.statusCount}";
-            }
-        }
-        else if (defenderCoins > 0)
+        else if (defCoins > 0)
         {
             result.outcome = ClashOutcome.DefenderWin;
-            result.damage = CoinCalculator.RollPower(defenderSkill, defenderCoins, defender.CoinHeadsChance);
-            result.log = $"{defender.UnitName} 클래시 승리! 피해 {result.damage}";
+            result.winnerIsAttacker = false;
+            result.damage = CoinCalculator.RollPower(defSkill, defCoins, defHeadsChance);
+            result.winnerSPChange = 10;
+            result.log = $"{defName} 클래시 승리! 피해 {result.damage}";
 
-            // SP 변동: 승자 +10
-            defender.OnClashWin();
-
-            if (defenderSkill.statusPotency > 0 && defenderSkill.statusCount > 0)
-            {
-                attacker.AddStatus(defenderSkill.inflictStatus,
-                    defenderSkill.statusPotency, defenderSkill.statusCount);
-                result.log += $" | {defenderSkill.inflictStatus} +{defenderSkill.statusPotency}/{defenderSkill.statusCount}";
-            }
+            if (defSkill.statusPotency > 0 && defSkill.statusCount > 0)
+                result.statusApplications.Add(new StatusApplication {
+                    applyToAttacker = true, type = defSkill.inflictStatus,
+                    potency = defSkill.statusPotency, count = defSkill.statusCount
+                });
         }
         else
         {
@@ -116,5 +68,16 @@ public static class ClashResolver
         }
 
         return result;
+    }
+
+    // 기존 호환 래퍼
+    public static ClashResult Resolve(
+        Unit attacker, SkillData atkSkill,
+        Unit defender, SkillData defSkill,
+        int atkSpeed, int defSpeed)
+    {
+        return Resolve(
+            attacker?.UnitName ?? "?", atkSkill, attacker?.CoinHeadsChance ?? 50, atkSpeed,
+            defender?.UnitName ?? "?", defSkill, defender?.CoinHeadsChance ?? 50, defSpeed);
     }
 }

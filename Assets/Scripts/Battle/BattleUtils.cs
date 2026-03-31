@@ -1,7 +1,4 @@
-/// <summary>
-/// 전투 관련 유틸리티 (정적 헬퍼).
-/// 타입 라벨, 심볼, 저항 표시 등.
-/// </summary>
+
 public static class BattleUtils
 {
     public static string GetDamageTypeLabel(SkillData skill)

@@ -1,61 +1,11 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class Unit : MonoBehaviour
 {
     [SerializeField] private UnitData unitData;
 
-    private int currentHP;
-    private bool isAlive;
-    private int _sp;
-    private int _shield;
-    private readonly List<StatusEffect> statusEffects = new List<StatusEffect>();
-
-    // ── SP 상수 (림버스 규칙) ──
-    public const int SP_MIN = -45;
-    public const int SP_MAX = 45;
-    public const int SP_CLASH_WIN = 10;
-    public const int SP_ALLY_DEATH = -10;
-    public const int SP_PANIC_THRESHOLD = -45;
-
-    // 외부에서 읽기만 가능 (캡슐화)
-    public string UnitName => unitData != null ? unitData.unitName : "없음";
-    public int CurrentHP => currentHP;
-    public int MaxHP => unitData != null ? unitData.LevelHP : 0;
-    public bool IsAlive => isAlive;
-    public float HPRatio => MaxHP > 0 ? (float)currentHP / MaxHP : 0f;
-    public SkillData[] SkillSlots => unitData != null ? unitData.skillSlot : null;
-    public int SP => _sp;
-    public bool IsPanicked => _sp <= SP_PANIC_THRESHOLD;
-    public int Shield => _shield;
-
-    // ── Stagger ──
-    private bool _isStaggered;
-    private int _staggerTurnsLeft;
-    private bool _staggerAppliedThisTurn;
-    private int _staggerCount; // 현재까지 발동된 흐트러짐 단계 (0~3)
-
-    public bool IsStaggered => _isStaggered;
-    public int StaggerCount => _staggerCount; // 몇 번째 흐트러짐인지
-    public float StaggerThreshold1 => unitData != null ? unitData.staggerThreshold1 : 0.65f;
-    public float StaggerThreshold2 => unitData != null ? unitData.staggerThreshold2 : 0.35f;
-    public float StaggerThreshold3 => unitData != null ? unitData.staggerThreshold3 : 0.15f;
-    public int OffenseLevel => unitData != null ? unitData.OffenseLevel : 0;
-    public int DefenseLevel => unitData != null ? unitData.DefenseLevel : 0;
-
-
-    /// <summary>
-    /// 흐트러짐 상태면 받는 피해 1.5배
-    /// </summary>
-    public float DamageMultiplier => _isStaggered ? 1.5f : 1f;
-
-    /// <summary>
-    /// 코인 앞면 확률 (0~100). 림버스 공식: 50 + SP
-    /// </summary>
-    public int CoinHeadsChance => Mathf.Clamp(50 + _sp, 5, 95);
-
+    private UnitCombatData _combat = new();
     private SkillDeck _deck;
-    public SkillDeck Deck => _deck;
 
     public System.Action<int, int> OnHPChanged;
     public System.Action<int> OnSPChanged;
@@ -63,274 +13,97 @@ public class Unit : MonoBehaviour
     public System.Action<bool, int> OnStaggerChanged;
     public System.Action OnStatusChanged;
 
+    public string UnitName => _combat.unitName;
+    public int CurrentHP => _combat.currentHP;
+    public int MaxHP => _combat.maxHP;
+    public bool IsAlive => _combat.isAlive;
+    public float HPRatio => _combat.HPRatio;
+    public int SP => _combat.sp;
+    public bool IsPanicked => _combat.IsPanicked;
+    public int Shield => _combat.shield;
+    public bool IsStaggered => _combat.isStaggered;
+    public int StaggerCount => _combat.staggerCount;
+    public float StaggerThreshold1 => _combat.staggerThreshold1;
+    public float StaggerThreshold2 => _combat.staggerThreshold2;
+    public float StaggerThreshold3 => _combat.staggerThreshold3;
+    public int OffenseLevel => _combat.offenseLevel;
+    public int DefenseLevel => _combat.defenseLevel;
+    public float DamageMultiplier => _combat.DamageMultiplier;
+    public int CoinHeadsChance => _combat.CoinHeadsChance;
+    public SkillData[] SkillSlots => unitData != null ? unitData.skillSlot : null;
+    public SkillDeck Deck => _deck;
+    public UnitCombatData Combat => _combat;
+
     public void Initialize()
     {
-        if (unitData == null)
-        {
-            isAlive = false;
-            return;
-        }
-        currentHP = unitData.LevelHP;
-        isAlive = true;
-        _sp = 0;
-        _shield = 0;
-        _isStaggered = false;
-        _staggerTurnsLeft = 0;
-        _staggerAppliedThisTurn = false;
-        _staggerCount = 0;
-        statusEffects.Clear();
-
-        // 스킬 덱 초기화 — 전체 skillSlot 사용 (공격 3/2/1 + 방어/회피 각 1장)
+        if (unitData == null) { _combat.isAlive = false; return; }
+        _combat.Initialize(unitData);
         var slots = SkillSlots;
-        if (slots != null && slots.Length > 0)
-            _deck = new SkillDeck(slots);
-
+        if (slots != null && slots.Length > 0) _deck = new SkillDeck(slots);
         NotifyAll();
     }
 
-    // ── SP 시스템 ──
+    public void ChangeSP(int amount) { int prev = _combat.sp; _combat.ChangeSP(amount); if (_combat.sp != prev) OnSPChanged?.Invoke(_combat.sp); }
+    public void OnClashWin() => ChangeSP(10);
+    public void OnAllyDeath() => ChangeSP(-10);
+    public int RollSpeed() => unitData != null ? Random.Range(unitData.minSpeed, unitData.maxSpeed + 1) : 0;
 
-    public void ChangeSP(int amount)
-    {
-        int next = Mathf.Clamp(_sp + amount, SP_MIN, SP_MAX);
-        if (next == _sp) return;
-        _sp = next;
-        OnSPChanged?.Invoke(_sp);
-    }
+    public void ApplyShield(int amount) { _combat.shield += Mathf.Max(0, amount); OnShieldChanged?.Invoke(_combat.shield); }
+    public void ClearShield() { _combat.shield = 0; OnShieldChanged?.Invoke(0); }
 
-    public void OnClashWin()
-    {
-        ChangeSP(SP_CLASH_WIN);
-    }
-
-    public void OnAllyDeath()
-    {
-        ChangeSP(SP_ALLY_DEATH);
-    }
-
-    public int RollSpeed()
-    {
-        if (unitData == null) return 0;
-        return Random.Range(unitData.minSpeed, unitData.maxSpeed + 1);
-    }
-
-    // ── Shield(방어) 시스템 ──
-
-    /// <summary>
-    /// Guard 스킬 발동 시 Shield HP 부여. 코인 굴림 결과만큼.
-    /// </summary>
-    public void ApplyShield(int amount)
-    {
-        _shield += Mathf.Max(0, amount);
-        Debug.Log($"[Shield] {UnitName} 방어막 +{amount} (총 {_shield})");
-        OnShieldChanged?.Invoke(_shield);
-    }
-
-    /// <summary>
-    /// 턴 종료 시 잔여 Shield 소멸.
-    /// </summary>
-    public void ClearShield()
-    {
-        if (_shield > 0) Debug.Log($"[Shield] {UnitName} 방어막 {_shield} 소멸");
-        _shield = 0;
-        OnShieldChanged?.Invoke(_shield);
-    }
-
-    public int TakeDamage(int damage)
-    {
-        return TakeDamage(damage, DamageType.Slash);
-    }
-
+    public int TakeDamage(int damage) => TakeDamage(damage, DamageType.Slash);
     public int TakeDamage(int damage, DamageType damageType, int attackerOffenseLevel = 0)
     {
-        if (!isAlive || damage <= 0) return 0;
-
-        float resist = GetResistance(damageType);
-
-        // 레벨 보정: diff / (|diff| + 25)
-        float levelMod = 1f;
-        if (attackerOffenseLevel > 0)
-        {
-            int diff = attackerOffenseLevel - DefenseLevel;
-            levelMod = 1f + (float)diff / (Mathf.Abs(diff) + 25);
-        }
-
-        // 피해 타입 저항 × 흐트러짐 배율 × 레벨 보정
-        int finalDamage = Mathf.RoundToInt(damage * resist * DamageMultiplier * levelMod);
-
-
-        // Shield 흡수
-        if (_shield > 0)
-        {
-            int absorbed = Mathf.Min(_shield, finalDamage);
-            _shield -= absorbed;
-            finalDamage -= absorbed;
-            Debug.Log($"[Shield] {UnitName} 방어막이 {absorbed} 흡수 (잔여 {_shield})");
-        }
-
-        currentHP -= finalDamage;
-
-        if (currentHP <= 0)
-        {
-            currentHP = 0;
-            isAlive = false;
-            OnHPChanged?.Invoke(currentHP, MaxHP);
-            return finalDamage;
-        }
-
-        OnHPChanged?.Invoke(currentHP, MaxHP);
-        CheckStagger();
-        return finalDamage;
+        bool wasStaggered = _combat.isStaggered;
+        int result = _combat.TakeDamage(damage, damageType, attackerOffenseLevel);
+        OnHPChanged?.Invoke(_combat.currentHP, _combat.maxHP);
+        _combat.CheckStagger();
+        if (_combat.isStaggered != wasStaggered) OnStaggerChanged?.Invoke(_combat.isStaggered, _combat.staggerCount);
+        return result;
     }
 
-    public float GetResistance(DamageType damageType)
-    {
-        if (unitData == null) return 1f;
+    public float GetResistance(DamageType type) => _combat.GetResistance(type);
 
-        switch (damageType)
-        {
-            case DamageType.Slash: return unitData.slashResist;
-            case DamageType.Pierce: return unitData.pierceResist;
-            case DamageType.Blunt: return unitData.bluntResist;
-            default: return 1f;
-        }
-    }
-
-    private void CheckStagger()
-    {
-        if (_isStaggered) return; // 이미 흐트러진 상태에선 중복 발동 안 함
-
-        // 3단계 구간 체크 — 아직 발동 안 된 가장 높은 구간 확인
-        float ratio = HPRatio;
-        float nextThreshold = 0f;
-
-        if (_staggerCount == 0 && ratio <= StaggerThreshold1)
-            nextThreshold = StaggerThreshold1;
-        else if (_staggerCount == 1 && ratio <= StaggerThreshold2)
-            nextThreshold = StaggerThreshold2;
-        else if (_staggerCount == 2 && ratio <= StaggerThreshold3)
-            nextThreshold = StaggerThreshold3;
-        else
-            return;
-
-        _staggerCount++;
-        _isStaggered = true;
-        _staggerTurnsLeft = 1;
-        _staggerAppliedThisTurn = true;
-        Debug.Log($"[Stagger] {UnitName} 흐트러짐 {_staggerCount}단계! (HP {ratio:P0} <= {nextThreshold:P0})");
-        OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
-    }
-
-    /// <summary>
-    /// 턴 시작 시 호출. 이번 턴에 막 걸린 흐트러짐은 건너뛰고,
-    /// 기존 흐트러짐만 카운트다운한다.
-    /// </summary>
     public void OnTurnStart()
     {
-        if (!_isStaggered) return;
+        bool was = _combat.isStaggered;
+        _combat.OnTurnStart();
+        if (_combat.isStaggered != was) OnStaggerChanged?.Invoke(_combat.isStaggered, _combat.staggerCount);
+    }
 
-        if (_staggerAppliedThisTurn)
+    public void AddStatus(StatusType type, int potency, int count) { _combat.AddStatus(type, potency, count); OnStatusChanged?.Invoke(); }
+    public StatusEffect GetStatus(StatusType type) => _combat.GetStatus(type);
+    public bool HasStatus(StatusType type) { var s = _combat.GetStatus(type); return s != null && !s.IsExpired; }
+    public int StatusCount => _combat.statusEffects.Count;
+
+    public int ConsumeBleed(int coinCount) { int r = _combat.ConsumeBleed(coinCount); OnHPChanged?.Invoke(_combat.currentHP, _combat.maxHP); OnStatusChanged?.Invoke(); return r; }
+    public int GetParalyzedCoins() => _combat.GetParalyzedCoins();
+    public void TickParalysis() { _combat.TickParalysis(); OnStatusChanged?.Invoke(); }
+    public int TickBurn() { int r = _combat.TickBurn(); OnHPChanged?.Invoke(_combat.currentHP, _combat.maxHP); OnStatusChanged?.Invoke(); return r; }
+    public int GetTremorBonus() { int r = _combat.GetTremorBonus(); OnStatusChanged?.Invoke(); return r; }
+    public int GetRuptureBonus() => _combat.GetRuptureBonus();
+    public void TickRupture() { _combat.TickRupture(); OnStatusChanged?.Invoke(); }
+    public void CleanupExpiredStatuses() { _combat.CleanupExpiredStatuses(); OnStatusChanged?.Invoke(); }
+
+    public SkillData EgoSkill
+    {
+        get
         {
-            _staggerAppliedThisTurn = false;
-            return;
-        }
-
-        _staggerTurnsLeft--;
-        if (_staggerTurnsLeft <= 0)
-        {
-            _isStaggered = false;
-            Debug.Log($"[Stagger] {UnitName} 흐트러짐 회복!");
-            OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
+            if (unitData?.skillSlot == null) return null;
+            foreach (var s in unitData.skillSlot)
+                if (s != null && s.skillType == SkillType.EGO) return s;
+            return null;
         }
     }
-
-    // ── 상태이상 시스템 ──
-
-    public void AddStatus(StatusType type, int potency, int count)
-    {
-        if (!isAlive || potency <= 0 || count <= 0) return;
-
-        var existing = GetStatus(type);
-        if (existing != null)
-        {
-            // 중첩: 위력은 더 높은 값, 횟수는 합산
-            existing.potency = existing.potency > potency ? existing.potency : potency;
-            existing.count += count;
-        }
-        else
-        {
-            statusEffects.Add(new StatusEffect(type, potency, count));
-        }
-        OnStatusChanged?.Invoke();
-    }
-
-    public StatusEffect GetStatus(StatusType type)
-    {
-        for (int i = 0; i < statusEffects.Count; i++)
-            if (statusEffects[i].type == type) return statusEffects[i];
-        return null;
-    }
-
-    /// <summary>
-    /// 출혈 소모: 공격 시 코인당 피해. 소모한 총 피해량 반환.
-    /// </summary>
-    public int ConsumeBleed(int coinCount)
-    {
-        if (!isAlive) return 0;
-        var bleed = GetStatus(StatusType.Bleed);
-        if (bleed == null || bleed.IsExpired) return 0;
-
-        int consumed = bleed.Consume(coinCount);
-        int damage = bleed.potency * consumed;
-        TakeDamage(damage);
-
-        if (bleed.IsExpired) statusEffects.Remove(bleed);
-        OnStatusChanged?.Invoke();
-        return damage;
-    }
-
-    /// <summary>
-    /// 마비 조회: 무효화할 코인 수 반환 (소모하지 않음).
-    /// 림버스 방식 — 턴 종료 시 횟수 감소.
-    /// </summary>
-    public int GetParalyzedCoins()
-    {
-        var para = GetStatus(StatusType.Paralysis);
-        if (para == null || para.IsExpired) return 0;
-        return para.potency;
-    }
-
-    /// <summary>
-    /// 턴 종료 시 마비 횟수 1 감소.
-    /// </summary>
-    public void TickParalysis()
-    {
-        var para = GetStatus(StatusType.Paralysis);
-        if (para == null || para.IsExpired) return;
-
-        para.Consume(1);
-        if (para.IsExpired) statusEffects.Remove(para);
-        OnStatusChanged?.Invoke();
-    }
-
-    /// <summary>
-    /// 턴 종료 시 만료된 상태이상 정리.
-    /// </summary>
-    public void CleanupExpiredStatuses()
-    {
-        statusEffects.RemoveAll(s => s.IsExpired);
-        OnStatusChanged?.Invoke();
-    }
+    public bool CanUseEgo() { var ego = EgoSkill; return ego != null && _combat.sp >= ego.egoCost; }
+    public SkillData UseEgo() { var ego = EgoSkill; if (ego == null || !CanUseEgo()) return null; ChangeSP(-ego.egoCost); return ego; }
 
     private void NotifyAll()
     {
-        OnHPChanged?.Invoke(currentHP, MaxHP);
-        OnSPChanged?.Invoke(_sp);
-        OnShieldChanged?.Invoke(_shield);
-        OnStaggerChanged?.Invoke(_isStaggered, _staggerCount);
+        OnHPChanged?.Invoke(_combat.currentHP, _combat.maxHP);
+        OnSPChanged?.Invoke(_combat.sp);
+        OnShieldChanged?.Invoke(_combat.shield);
+        OnStaggerChanged?.Invoke(_combat.isStaggered, _combat.staggerCount);
         OnStatusChanged?.Invoke();
     }
-
-    public bool HasStatus(StatusType type) => GetStatus(type) != null && !GetStatus(type).IsExpired;
-    public int StatusCount => statusEffects.Count;
 }

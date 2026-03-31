@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 public enum ClashOutcome
 {
     AttackerWin,
@@ -5,13 +7,24 @@ public enum ClashOutcome
     Draw
 }
 
+public struct StatusApplication
+{
+    public bool applyToAttacker;
+    public StatusType type;
+    public int potency;
+    public int count;
+}
+
 public class ClashResult
 {
     public ClashOutcome outcome;
-    public int damage;       // 승자가 패자에게 입히는 피해
-    public string log;       // 전투 로그 텍스트
-
-    // 어떤 스킬의 피해 타입인지 추적
+    public int damage;
+    public string log;
     public SkillData attackerSkill;
     public SkillData defenderSkill;
+
+    public int winnerSPChange;
+    public bool winnerIsAttacker;
+    public List<StatusApplication> statusApplications = new();
+    public List<(bool isAttacker, int bleedDamage)> bleedResults = new();
 }

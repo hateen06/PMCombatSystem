@@ -1,10 +1,4 @@
 using UnityEngine;
-
-/// <summary>
-/// 유닛 간 타겟 연결선.
-/// 월드 좌표 기준 LineRenderer 사용.
-/// 합/일방에 따라 색과 두께를 바꾼다.
-/// </summary>
 [RequireComponent(typeof(LineRenderer))]
 public class TargetLineUI : MonoBehaviour
 {
@@ -15,10 +9,13 @@ public class TargetLineUI : MonoBehaviour
     [SerializeField] private Vector3 startOffset = new Vector3(0f, 0.6f, 0f);
     [SerializeField] private Vector3 endOffset = new Vector3(0f, 0.6f, 0f);
 
+    [SerializeField] private GameObject clashSymbolPrefab;
+
     private LineRenderer _line;
     private Unit _from;
     private Unit _to;
     private bool _isClash;
+    private GameObject _clashSymbol;
 
     private void Awake()
     {
@@ -37,6 +34,7 @@ public class TargetLineUI : MonoBehaviour
         gameObject.SetActive(from != null && to != null);
         ApplyStyle();
         Refresh();
+        UpdateClashSymbol();
     }
 
     public void Hide()
@@ -73,7 +71,33 @@ public class TargetLineUI : MonoBehaviour
             Hide();
             return;
         }
-        _line.SetPosition(0, _from.transform.position + startOffset);
-        _line.SetPosition(1, _to.transform.position + endOffset);
+        Vector3 p0 = _from.transform.position + startOffset;
+        Vector3 p1 = _to.transform.position + endOffset;
+        _line.SetPosition(0, p0);
+        _line.SetPosition(1, p1);
+
+        if (_clashSymbol != null)
+            _clashSymbol.transform.position = (p0 + p1) * 0.5f;
+    }
+
+    private void UpdateClashSymbol()
+    {
+        if (!_isClash) return;
+        if (_clashSymbol != null) return;
+
+        if (clashSymbolPrefab != null)
+        {
+            _clashSymbol = Instantiate(clashSymbolPrefab, transform);
+        }
+        else
+        {
+            _clashSymbol = new GameObject("ClashMark");
+            _clashSymbol.transform.SetParent(transform, false);
+            _clashSymbol.transform.localScale = Vector3.one * 0.4f;
+
+            var sr = _clashSymbol.AddComponent<SpriteRenderer>();
+            sr.color = new Color(1f, 0.3f, 0.3f, 0.9f);
+            sr.sortingOrder = 10;
+        }
     }
 }

@@ -3,12 +3,6 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-
-/// <summary>
-/// 전투 화면 UI.
-/// BattleManager의 이벤트를 구독해서 표시만 담당.
-/// 전투 로직을 알 필요 없다.
-/// </summary>
 public class BattleUI : MonoBehaviour
 {
     private const int MaxLogLines = 10;
@@ -49,6 +43,9 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private SpeedDiceUI speedDicePrefab;
     [SerializeField] private Transform speedDiceRoot;
 
+    [Header("속도 타임라인")]
+    [SerializeField] private SpeedTimelineUI speedTimeline;
+
     [Header("타겟 라인")]
     [SerializeField] private TargetLineUI targetLinePrefab;
     [SerializeField] private Transform targetLineRoot;
@@ -61,6 +58,8 @@ public class BattleUI : MonoBehaviour
     private readonly Dictionary<Unit, SpeedDiceUI> _speedDiceMap = new Dictionary<Unit, SpeedDiceUI>();
     private readonly List<TargetLineUI> _targetLines = new List<TargetLineUI>();
     private readonly HashSet<Unit> _boundUnits = new HashSet<Unit>();
+    private readonly Dictionary<Unit, ResistanceIndicatorUI> _resistIndicators = new();
+    private readonly Dictionary<Unit, SpeedDiceUI> _enemyIntentIcons = new();
 
     private int _selectedIndex = -1;
 
@@ -86,6 +85,8 @@ public class BattleUI : MonoBehaviour
 
             RefreshSkillCards();
             BindObservedData();
+            EnsureSpeedTimeline();
+            CreateColorVeils();
         }
 
         // 아군2 스킬 카드 초기화
@@ -146,6 +147,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
         battleManager.OnSpeedRolled += UpdateSpeedDice;
         battleManager.OnTargetLineUpdated += UpdateTargetLine;
+        battleManager.OnClashPairHighlighted += OnClashPairHighlighted;
+        battleManager.OnEnemyIntentRevealed += OnEnemyIntentRevealed;
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
         battleManager.OnCardOverridden2 += OnCardOverridden2;
@@ -164,6 +167,8 @@ public class BattleUI : MonoBehaviour
         battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
         battleManager.OnSpeedRolled -= UpdateSpeedDice;
         battleManager.OnTargetLineUpdated -= UpdateTargetLine;
+        battleManager.OnClashPairHighlighted -= OnClashPairHighlighted;
+        battleManager.OnEnemyIntentRevealed -= OnEnemyIntentRevealed;
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
         battleManager.OnCardOverridden2 -= OnCardOverridden2;
@@ -189,6 +194,7 @@ public class BattleUI : MonoBehaviour
             unit.OnHPChanged -= HandleUnitHPChanged;
             unit.OnSPChanged -= HandleUnitSPChanged;
             unit.OnStatusChanged -= HandleUnitStatusChanged;
+            unit.OnStaggerChanged -= HandleStaggerChanged;
             if (unit.Deck != null) unit.Deck.OnHandChanged -= HandleHandChanged;
         }
         _boundUnits.Clear();
@@ -200,8 +206,96 @@ public class BattleUI : MonoBehaviour
         unit.OnHPChanged += HandleUnitHPChanged;
         unit.OnSPChanged += HandleUnitSPChanged;
         unit.OnStatusChanged += HandleUnitStatusChanged;
+        unit.OnStaggerChanged += HandleStaggerChanged;
         if (unit.Deck != null) unit.Deck.OnHandChanged += HandleHandChanged;
         _boundUnits.Add(unit);
+    }
+
+    private void CreateColorVeils()
+    {
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+
+        void MakeVeil(string name, float xMin, float xMax, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            go.transform.SetParent(canvas.transform, false);
+            go.transform.SetAsFirstSibling();
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(xMin, 0f);
+            rt.anchorMax = new Vector2(xMax, 1f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            go.GetComponent<UnityEngine.UI.Image>().color = color;
+            go.GetComponent<UnityEngine.UI.Image>().raycastTarget = false;
+        }
+
+        MakeVeil("AllyVeil", 0f, 0.4f, new Color(0.125f, 0.2f, 0.286f, 0.14f));
+        MakeVeil("EnemyVeil", 0.6f, 1f, new Color(0.29f, 0.15f, 0.15f, 0.16f));
+    }
+
+    private void EnsureSpeedTimeline()
+    {
+        if (speedTimeline != null) return;
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+        var go = new GameObject("SpeedTimeline", typeof(RectTransform), typeof(SpeedTimelineUI));
+        go.transform.SetParent(canvas.transform, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.1f, 0.88f);
+        rt.anchorMax = new Vector2(0.9f, 0.97f);
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        speedTimeline = go.GetComponent<SpeedTimelineUI>();
+    }
+
+    private void OnClashPairHighlighted(Unit a, Unit b)
+    {
+        if (speedTimeline != null) speedTimeline.HighlightClashPair(a, b);
+    }
+
+    private void OnEnemyIntentRevealed(Unit enemy, SkillData skill)
+    {
+        if (enemy == null || skill == null) return;
+        if (speedTimeline != null)
+            speedTimeline.AddUnit(enemy, 0, true, skill);
+
+        // 저항 표시: 모든 아군에 대해 이 스킬의 피해 타입 기준 저항 표시
+        if (battleManager == null) return;
+        foreach (var ally in battleManager.AllyUnits)
+        {
+            if (ally == null || !ally.IsAlive) continue;
+            if (!_resistIndicators.TryGetValue(ally, out var indicator) || indicator == null)
+            {
+                var canvas = GetComponentInParent<Canvas>();
+                if (canvas == null) continue;
+                var go = new GameObject($"Resist_{ally.UnitName}", typeof(RectTransform), typeof(ResistanceIndicatorUI));
+                go.transform.SetParent(canvas.transform, false);
+                indicator = go.GetComponent<ResistanceIndicatorUI>();
+                indicator.Bind(ally, canvas);
+                _resistIndicators[ally] = indicator;
+            }
+            indicator.Show(skill.damageType);
+        }
+    }
+
+    private void HandleStaggerChanged(bool isStaggered, int count)
+    {
+        // 이벤트 발신자 특정 불가하므로 전체 순회 — 각 유닛의 실제 상태 기준
+        foreach (var unit in _boundUnits)
+        {
+            if (unit == null) continue;
+            var sr = unit.GetComponent<SpriteRenderer>();
+            if (sr != null)
+                sr.color = unit.IsStaggered ? new Color(0.6f, 0.4f, 0.4f, 1f) : Color.white;
+        }
+        // 타임라인 dim 처리
+        if (speedTimeline != null)
+        {
+            foreach (var unit in _boundUnits)
+                if (unit != null && unit.IsStaggered)
+                    speedTimeline.AddUnit(unit, 0, battleManager.EnemyUnits.Contains(unit));
+        }
     }
 
     private void HandleUnitHPChanged(int current, int max) => RefreshUnitInfo();
@@ -315,6 +409,12 @@ public class BattleUI : MonoBehaviour
     {
         if (unit == null) return;
 
+        bool isEnemy = battleManager != null && battleManager.EnemyUnits != null &&
+            battleManager.EnemyUnits.Contains(unit);
+
+        if (speedTimeline != null)
+            speedTimeline.AddUnit(unit, speed, isEnemy);
+
         if (!_speedDiceMap.TryGetValue(unit, out var dice) || dice == null)
         {
             var canvas = GetComponentInParent<Canvas>();
@@ -322,9 +422,7 @@ public class BattleUI : MonoBehaviour
             var parent = speedDiceRoot != null ? speedDiceRoot : canvas.transform;
 
             if (speedDicePrefab != null)
-            {
                 dice = Instantiate(speedDicePrefab, parent);
-            }
             else
             {
                 var go = new GameObject($"SpeedDice_{unit.UnitName}", typeof(RectTransform), typeof(SpeedDiceUI));
@@ -332,8 +430,6 @@ public class BattleUI : MonoBehaviour
                 dice = go.GetComponent<SpeedDiceUI>();
             }
 
-            bool isEnemy = battleManager != null && battleManager.EnemyUnits != null &&
-                battleManager.EnemyUnits.Contains(unit);
             dice.Bind(unit, canvas, isEnemy);
             _speedDiceMap[unit] = dice;
         }
@@ -383,7 +479,11 @@ public class BattleUI : MonoBehaviour
         {
             _selectedIndex = -1;
 
-            // 이전 타겟 라인 정리
+            if (speedTimeline != null) speedTimeline.Clear();
+
+            foreach (var kv in _resistIndicators)
+                if (kv.Value != null) kv.Value.Hide();
+
             for (int i = 0; i < _targetLines.Count; i++)
                 if (_targetLines[i] != null) Destroy(_targetLines[i].gameObject);
             _targetLines.Clear();
@@ -409,7 +509,7 @@ public class BattleUI : MonoBehaviour
             if (allyHPText != null) allyHPText.text = $"{ally.CurrentHP}/{ally.MaxHP}";
             if (allySPText != null)
             {
-                allySPText.text = $"SP: {ally.SP}";
+                allySPText.text = $"SP: {ally.SP} ({ally.CoinHeadsChance}%)";
                 allySPText.color = ally.SP >= 0
                     ? new Color(0.5f, 0.8f, 1f)
                     : new Color(1f, 0.4f, 0.4f);
@@ -430,7 +530,7 @@ public class BattleUI : MonoBehaviour
             if (enemyHPText != null) enemyHPText.text = $"{enemy.CurrentHP}/{enemy.MaxHP}";
             if (enemySPText != null)
             {
-                enemySPText.text = $"SP: {enemy.SP}";
+                enemySPText.text = $"SP: {enemy.SP} ({enemy.CoinHeadsChance}%)";
                 enemySPText.color = enemy.SP >= 0
                     ? new Color(0.5f, 0.8f, 1f)
                     : new Color(1f, 0.4f, 0.4f);

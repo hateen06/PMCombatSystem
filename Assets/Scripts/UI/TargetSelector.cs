@@ -1,11 +1,6 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
-
-/// <summary>
-/// 전투 중 적 유닛 클릭 감지.
-/// BattleManager에 붙여서 모든 적 클릭을 한 곳에서 처리.
-/// </summary>
 public class TargetSelector : MonoBehaviour
 {
     private BattleManager _bm;

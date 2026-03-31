@@ -1,15 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
-
-/// <summary>
-/// 턴 행동(TurnAction) 생성 담당.
-/// 아군 선택 스킬 + 적 AI 스킬 → 행동 리스트 조립.
-/// </summary>
 public class ActionBuilder
 {
-    /// <summary>
-    /// 현재 턴의 모든 행동을 조립.
-    /// </summary>
     public List<TurnAction> Build(
         List<Unit> allyUnits, List<Unit> enemyUnits,
         SkillData ally1Skill, int ally1CardIndex,
@@ -26,9 +18,7 @@ public class ActionBuilder
         var ally1 = allyUnits.Count > 0 ? allyUnits[0] : null;
         if (ally1 != null && ally1.IsAlive && !ally1.IsStaggered && ally1Skill != null)
         {
-            if (ally1.Deck != null && ally1CardIndex >= 0)
-                ally1.Deck.UseCard(ally1CardIndex);
-
+            // ally1 카드 소모는 BattleManager에서 이미 처리됨
             int spd = ally1.RollSpeed();
             Unit target = unitTargets.ContainsKey(0) ? unitTargets[0] : null;
             if (target == null || !target.IsAlive) target = getRandomAliveEnemy();

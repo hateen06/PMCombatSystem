@@ -1,17 +1,14 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
-
-/// <summary>
-/// HP 게이지 바. anchorMax.x 기반으로 게이지가 줄어드는 방식.
-/// fillAmount 방식은 stretch RectTransform에서 시각적으로 안 보이는 문제가 있어
-/// anchorMax.x를 HP 비율에 맞춰 조절하는 방식으로 변경.
-/// </summary>
+using TMPro;
 public class HPBar : MonoBehaviour
 {
     [SerializeField] private RectTransform fillRect;
     [SerializeField] private Image fillImage;
     [SerializeField] private float tweenDuration = 0.4f;
+
+    [SerializeField] private TMP_Text shieldText;
 
     private Unit _target;
     private Tween _currentTween;
@@ -20,7 +17,10 @@ public class HPBar : MonoBehaviour
     public void Bind(Unit unit)
     {
         if (_target != null)
+        {
             _target.OnHPChanged -= HandleHPChanged;
+            _target.OnShieldChanged -= HandleShieldChanged;
+        }
 
         _target = unit;
 
@@ -50,14 +50,14 @@ public class HPBar : MonoBehaviour
         CreateStaggerMarkers();
 
         if (_target != null)
+        {
             _target.OnHPChanged += HandleHPChanged;
+            _target.OnShieldChanged += HandleShieldChanged;
+        }
 
         Refresh();
+        UpdateShieldDisplay();
     }
-
-    /// <summary>
-    /// HP바 위에 흐트러짐 구간을 나타내는 세로선 마커 생성
-    /// </summary>
     private void CreateStaggerMarkers()
     {
         foreach (var m in _markers)
@@ -92,15 +92,34 @@ public class HPBar : MonoBehaviour
         }
     }
 
-    private void HandleHPChanged(int current, int max)
-    {
-        Refresh();
-    }
+    private void HandleHPChanged(int current, int max) => Refresh();
+    private void HandleShieldChanged(int shield) => UpdateShieldDisplay();
 
-    /// <summary>
-    /// 외부에서 호출 — HP 변경 시.
-    /// anchorMax.x를 HP 비율에 맞춰 줄여서 게이지가 시각적으로 줄어듦.
-    /// </summary>
+    private void UpdateShieldDisplay()
+    {
+        if (shieldText == null)
+        {
+            var go = new GameObject("ShieldText", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
+            go.transform.SetParent(transform, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(35f, 0f);
+            rt.sizeDelta = new Vector2(60f, 24f);
+            shieldText = go.GetComponent<TMPro.TextMeshProUGUI>();
+            shieldText.fontSize = 16;
+            shieldText.alignment = TMPro.TextAlignmentOptions.MidlineLeft;
+            shieldText.color = new Color(0.3f, 0.7f, 1f);
+        }
+
+        if (_target == null || _target.Shield <= 0)
+        {
+            shieldText.gameObject.SetActive(false);
+            return;
+        }
+        shieldText.text = $"🛡{_target.Shield}";
+        shieldText.gameObject.SetActive(true);
+    }
     public void Refresh()
     {
         if (_target == null || fillRect == null) return;
@@ -120,10 +139,6 @@ public class HPBar : MonoBehaviour
             tweenDuration
         ).SetEase(Ease.OutQuad);
     }
-
-    /// <summary>
-    /// 피격 시 흔들림 + HP 갱신
-    /// </summary>
     public void OnHit()
     {
         Refresh();
