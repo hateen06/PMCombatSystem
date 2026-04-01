@@ -38,6 +38,7 @@ public class BattleManager : MonoBehaviour
     public System.Action<Unit, Unit, bool> OnTargetLineUpdated;
     public System.Action<Unit, Unit> OnClashPairHighlighted;
     public System.Action<Unit, SkillData> OnEnemyIntentRevealed;
+    public System.Action<Unit, Unit, SkillData, int> OnEnemyIntentAssigned;
     public System.Action OnHandDrawn;
     public System.Action<int, int, SkillData> OnCardOverridden;
     public System.Action<Unit, Unit> OnTargetAssigned;
@@ -407,7 +408,10 @@ public class BattleManager : MonoBehaviour
         {
             OnSpeedRolled?.Invoke(action.actor, action.speed);
             if (!action.isAllyAction)
+            {
                 OnEnemyIntentRevealed?.Invoke(action.actor, action.skill);
+                OnEnemyIntentAssigned?.Invoke(action.actor, action.target, action.skill, action.speed);
+            }
         }
 
         var plan = TurnResolver.Plan(actions);

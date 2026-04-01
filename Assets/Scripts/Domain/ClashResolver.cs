@@ -19,6 +19,8 @@ public static class ClashResolver
 
         int atkCoins = atkSkill.coinCount;
         int defCoins = defSkill.coinCount;
+        result.attackerStartingCoins = atkCoins;
+        result.defenderStartingCoins = defCoins;
         var log = new StringBuilder();
 
         while (atkCoins > 0 && defCoins > 0)
@@ -55,6 +57,9 @@ public static class ClashResolver
 
         result.winnerSPChange = 10;
         result.loserSPChange = -10;
+
+        result.attackerRemainingCoins = atkCoins;
+        result.defenderRemainingCoins = defCoins;
 
         if (atkCoins > 0)
         {

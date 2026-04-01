@@ -23,7 +23,9 @@ public class SpeedTimelineUI : MonoBehaviour
         public TMP_Text nameText;
         public TMP_Text speedText;
         public Image skillIcon;
+        public TMP_Text intentText;
         public SkillData assignedSkill;
+        public Unit target;
     }
 
     private void Awake()
@@ -94,11 +96,22 @@ public class SpeedTimelineUI : MonoBehaviour
         iconGo.transform.SetParent(go.transform, false);
         var iconRt = iconGo.GetComponent<RectTransform>();
         iconRt.anchorMin = new Vector2(0f, 0f);
-        iconRt.anchorMax = new Vector2(0.5f, 0.5f);
+        iconRt.anchorMax = new Vector2(0.35f, 0.5f);
         iconRt.offsetMin = new Vector2(6f, 2f);
         iconRt.offsetMax = new Vector2(-2f, 0f);
         slot.skillIcon = iconGo.GetComponent<Image>();
         slot.skillIcon.preserveAspect = true;
+
+        var intentGo = new GameObject("Intent", typeof(RectTransform), typeof(TextMeshProUGUI));
+        intentGo.transform.SetParent(go.transform, false);
+        var intentRt = intentGo.GetComponent<RectTransform>();
+        intentRt.anchorMin = new Vector2(0.35f, 0f);
+        intentRt.anchorMax = new Vector2(1f, 0.5f);
+        intentRt.offsetMin = new Vector2(2f, 2f);
+        intentRt.offsetMax = new Vector2(-4f, 0f);
+        slot.intentText = intentGo.GetComponent<TMP_Text>();
+        slot.intentText.fontSize = 11;
+        slot.intentText.alignment = TextAlignmentOptions.Left;
 
         RefreshSlotVisual(slot);
     }
@@ -135,6 +148,19 @@ public class SpeedTimelineUI : MonoBehaviour
                 slot.skillIcon.color = Color.clear;
             }
         }
+
+        if (slot.intentText != null)
+        {
+            if (slot.target != null && slot.assignedSkill != null)
+            {
+                slot.intentText.text = $"→ {slot.target.UnitName}\n{slot.assignedSkill.skillName}";
+                slot.intentText.color = new Color(1f, 0.92f, 0.75f);
+            }
+            else
+            {
+                slot.intentText.text = string.Empty;
+            }
+        }
     }
 
     private void SortAndLayout()
@@ -160,5 +186,22 @@ public class SpeedTimelineUI : MonoBehaviour
             if (s.unit == a || s.unit == b)
                 s.bg.color = new Color(0.7f, 0.2f, 0.2f, 0.95f);
         }
+    }
+
+    public void SetIntent(Unit unit, Unit target, SkillData skill, int speed)
+    {
+        var slot = _slots.Find(s => s.unit == unit);
+        if (slot == null)
+        {
+            AddUnit(unit, speed, true, skill);
+            slot = _slots.Find(s => s.unit == unit);
+        }
+
+        if (slot == null) return;
+        slot.target = target;
+        slot.speed = speed;
+        slot.assignedSkill = skill;
+        RefreshSlotVisual(slot);
+        SortAndLayout();
     }
 }
