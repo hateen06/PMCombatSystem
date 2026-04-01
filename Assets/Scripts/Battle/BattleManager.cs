@@ -94,25 +94,7 @@ public class BattleManager : MonoBehaviour
 
     public void SelectSkill(int index)
     {
-        if (!_fsm.Is(BattleState.SkillSelect)) return;
-        if (Ally.Deck == null) return;
-        var hand = Ally.Deck.CurrentHand;
-        if (index < 0 || index >= hand.Count) return;
-
-        _sel.selectedSkill = hand[index];
-        _sel.selectedIndex = index;
-        _sel.isGuarding = false;
-        _sel.isEvading = false;
-        _sel.unitOriginalSkill[0] = _sel.selectedSkill;
-
-        if (_sel.unitDefenseActive.ContainsKey(0) && _sel.unitDefenseActive[0])
-        {
-            _sel.unitDefenseActive[0] = false;
-            OnCardOverridden?.Invoke(index, _sel.selectedSkill);
-        }
-        Log("선택: " + _sel.selectedSkill.skillName);
-        _presenter.UpdateClashPreview(_sel.selectedSkill, Ally, Enemy);
-        OnTargetPreviewUpdated?.Invoke(Ally, Enemy);
+        SelectSkillForUnit(0, index);
     }
 
     public void SelectSkillForUnit(int unitIndex, int cardIndex)
@@ -124,15 +106,25 @@ public class BattleManager : MonoBehaviour
         var hand = unit.Deck.CurrentHand;
         if (cardIndex < 0 || cardIndex >= hand.Count) return;
 
-        _sel.unitSelectedSkills[unitIndex] = hand[cardIndex];
-        _sel.unitSelectedIndices[unitIndex] = cardIndex;
-        _sel.unitOriginalSkill[unitIndex] = hand[cardIndex];
+                var selection = _sel.Get(unitIndex);
+        selection.skill = hand[cardIndex];
+        selection.cardIndex = cardIndex;
+        selection.originalSkill = hand[cardIndex];
 
-        if (_sel.unitDefenseActive.ContainsKey(unitIndex) && _sel.unitDefenseActive[unitIndex])
+        if (selection.isGuarding || selection.isEvading)
         {
-            _sel.unitDefenseActive[unitIndex] = false;
-            OnCardOverridden2?.Invoke(cardIndex, hand[cardIndex]);
+            selection.isGuarding = false;
+            selection.isEvading = false;
+            selection.evadeSkill = null;
+            selection.guardCardIndex = -1;
+            OnCardOverridden?.Invoke(unitIndex, cardIndex, hand[cardIndex]);
         }
+
+        if (selection.target == null || !selection.target.IsAlive)
+            selection.target = GetRandomAliveEnemy();
+
+        _presenter.UpdateClashPreview(selection.skill, unit, selection.target);
+        OnTargetPreviewUpdated?.Invoke(unit, selection.target);
         Log($"[유닛{unitIndex}] 선택: {hand[cardIndex].skillName}");
     }
 
@@ -145,20 +137,26 @@ public class BattleManager : MonoBehaviour
         if (!_fsm.Is(BattleState.SkillSelect)) return;
         if (target == null || !target.IsAlive) return;
 
-        int activeAlly = _sel.selectedIndex >= 0 ? 0 : -1;
-        foreach (var kv in _sel.unitSelectedIndices)
-            if (kv.Value >= 0) activeAlly = kv.Key;
+        int activeAlly = -1;
+        for (int i = allyUnits.Count - 1; i >= 0; i--)
+        {
+            var selection = _sel.Get(i);
+            if (selection.skill != null)
+            {
+                activeAlly = i;
+                break;
+            }
+        }
         if (activeAlly < 0) activeAlly = 0;
 
-        _sel.unitTargets[activeAlly] = target;
-        _sel.currentTarget = target;
+        var current = _sel.Get(activeAlly);
+        current.target = target;
         Log($"[타겟] {(activeAlly < allyUnits.Count ? allyUnits[activeAlly].UnitName : "?")} → {target.UnitName}");
         OnTargetAssigned?.Invoke(activeAlly < allyUnits.Count ? allyUnits[activeAlly] : null, target);
 
-        if (_sel.selectedSkill != null)
-            _presenter.UpdateClashPreview(_sel.selectedSkill, Ally, Enemy);
+        if (current.skill != null && activeAlly < allyUnits.Count)
+            _presenter.UpdateClashPreview(current.skill, allyUnits[activeAlly], target);
 
-        // 현재 타겟 라인 프리뷰
         if (activeAlly < allyUnits.Count)
             OnTargetLineUpdated?.Invoke(allyUnits[activeAlly], target, false);
     }
@@ -174,30 +172,25 @@ public class BattleManager : MonoBehaviour
         var unit = allyUnits[unitIndex];
 
         // 토글 해제
-        if (_sel.unitDefenseActive.ContainsKey(unitIndex) && _sel.unitDefenseActive[unitIndex])
+        var selection = _sel.Get(unitIndex);
+        if (selection.isGuarding || selection.isEvading)
         {
-            _sel.unitDefenseActive[unitIndex] = false;
+            selection.isGuarding = false;
+            selection.isEvading = false;
+            SkillData orig = selection.originalSkill;
+            if (orig == null && unit.Deck != null && cardIndex < unit.Deck.CurrentHand.Count)
+                orig = unit.Deck.CurrentHand[cardIndex];
+
             if (unitIndex == 0)
             {
-                SkillData orig = _sel.unitOriginalSkill.ContainsKey(0) ? _sel.unitOriginalSkill[0] : null;
-                if (orig == null && Ally.Deck != null && cardIndex < Ally.Deck.CurrentHand.Count)
-                    orig = Ally.Deck.CurrentHand[cardIndex];
-                if (orig != null) { _sel.selectedSkill = orig; OnCardOverridden?.Invoke(cardIndex, orig); }
-                _sel.isGuarding = false;
-                _sel.isEvading = false;
+                if (orig != null) selection.skill = orig;
             }
             else
             {
-                SkillData orig = _sel.unitOriginalSkill.ContainsKey(unitIndex) ? _sel.unitOriginalSkill[unitIndex] : null;
-                if (orig == null && unit.Deck != null && cardIndex < unit.Deck.CurrentHand.Count)
-                    orig = unit.Deck.CurrentHand[cardIndex];
-                if (orig != null)
-                {
-                    if (unitIndex == 1) OnCardOverridden2?.Invoke(cardIndex, orig);
-                    else if (unitIndex == 2) OnCardOverridden3?.Invoke(cardIndex, orig);
-                }
-                _sel.unitSelectedSkills.Remove(unitIndex);
+                selection.skill = null;
             }
+
+            if (orig != null) OnCardOverridden?.Invoke(unitIndex, cardIndex, orig);
             Log($"[해제] {unit.UnitName} → 공격 복귀");
             return;
         }
@@ -214,43 +207,32 @@ public class BattleManager : MonoBehaviour
         }
         if (defSkill == null) { Log("[!] 방어/회피 스킬 없음"); return; }
 
-        _sel.unitDefenseActive[unitIndex] = true;
+        var hand = unit.Deck?.CurrentHand;
+        if (hand != null && cardIndex < hand.Count)
+            selection.originalSkill = hand[cardIndex];
 
-        if (unitIndex == 0)
-        {
-            if (_sel.selectedSkill != null) _sel.unitOriginalSkill[0] = _sel.selectedSkill;
-            _sel.isGuarding = defSkill.skillType == SkillType.Defense;
-            _sel.isEvading = defSkill.skillType == SkillType.Evade;
-            _sel.guardCardIndex = cardIndex;
-            _sel.selectedSkill = defSkill;
-            _sel.selectedIndex = cardIndex;
-            if (_sel.isEvading) _sel.evadeSkill = defSkill;
-            OnCardOverridden?.Invoke(cardIndex, defSkill);
-            Log($"[{(_sel.isGuarding ? "방어" : "회피")}] {unit.UnitName} → {defSkill.skillName}");
-        }
-        else
-        {
-            var hand = unit.Deck?.CurrentHand;
-            if (hand != null && cardIndex < hand.Count)
-                _sel.unitOriginalSkill[unitIndex] = hand[cardIndex];
-            _sel.unitSelectedSkills[unitIndex] = defSkill;
-            _sel.unitSelectedIndices[unitIndex] = cardIndex;
-            if (unitIndex == 1) OnCardOverridden2?.Invoke(cardIndex, defSkill);
-            else if (unitIndex == 2) OnCardOverridden3?.Invoke(cardIndex, defSkill);
-            Log($"[{(defSkill.skillType == SkillType.Defense ? "방어" : "회피")}] {unit.UnitName} → {defSkill.skillName}");
-        }
+        selection.skill = defSkill;
+        selection.cardIndex = cardIndex;
+        selection.isGuarding = defSkill.skillType == SkillType.Defense;
+        selection.isEvading = defSkill.skillType == SkillType.Evade;
+        selection.guardCardIndex = cardIndex;
+        if (selection.isEvading) selection.evadeSkill = defSkill;
+
+        OnCardOverridden?.Invoke(unitIndex, cardIndex, defSkill);
+        Log($"[{(defSkill.skillType == SkillType.Defense ? "방어" : "회피")}] {unit.UnitName} → {defSkill.skillName}");
     }
 
     // 레거시 호환
     public void SelectEvade(int cardIndex)
     {
-        _sel.isEvading = true;
-        _sel.selectedSkill = null;
-        _sel.selectedIndex = cardIndex;
+        var selection0 = _sel.Get(0);
+        selection0.isEvading = true;
+        selection0.skill = null;
+        selection0.cardIndex = cardIndex;
         if (Ally.Deck != null && cardIndex >= 0)
         {
             var hand = Ally.Deck.CurrentHand;
-            if (cardIndex < hand.Count) _sel.evadeSkill = hand[cardIndex];
+            if (cardIndex < hand.Count) selection0.evadeSkill = hand[cardIndex];
             Ally.Deck.UseCard(cardIndex);
         }
         Log("[회피] " + Ally.UnitName + " 회피 태세");
@@ -258,48 +240,51 @@ public class BattleManager : MonoBehaviour
 
     public void OnEvadeButton()
     {
-        if (_sel.selectedIndex < 0 && !_sel.isGuarding) return;
-        int evadeIndex = _sel.isGuarding ? _sel.guardCardIndex : _sel.selectedIndex;
+        var selection0 = _sel.Get(0);
+        if (selection0.cardIndex < 0 && !selection0.isGuarding) return;
+        int evadeIndex = selection0.isGuarding ? selection0.guardCardIndex : selection0.cardIndex;
         if (evadeIndex < 0) return;
         CancelGuard();
-        _sel.selectedIndex = evadeIndex;
-        SelectEvade(_sel.selectedIndex);
+        selection0.cardIndex = evadeIndex;
+        SelectEvade(selection0.cardIndex);
         ExecuteTurn();
     }
 
     public void OnGuardButton()
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
-        if (_sel.selectedIndex < 0 && !_sel.isGuarding) { Log("[!] 카드를 먼저 선택하세요"); return; }
+        var selection0 = _sel.Get(0);
+        if (selection0.cardIndex < 0 && !selection0.isGuarding) { Log("[!] 카드를 먼저 선택하세요"); return; }
 
-        if (_sel.isGuarding) { CancelGuard(); return; }
+        if (selection0.isGuarding) { CancelGuard(); return; }
 
         var guardSkill = FindGuardSkill();
         if (guardSkill == null) { Log("[!] Guard 스킬 없음"); return; }
 
-        _sel.isGuarding = true;
-        _sel.guardCardIndex = _sel.selectedIndex;
-        OnCardOverridden?.Invoke(_sel.selectedIndex, guardSkill);
-        _sel.selectedSkill = guardSkill;
-        _sel.isEvading = false;
+        selection0.isGuarding = true;
+        selection0.guardCardIndex = selection0.cardIndex;
+        OnCardOverridden?.Invoke(0, selection0.cardIndex, guardSkill);
+        selection0.skill = guardSkill;
+        selection0.isEvading = false;
         Log($"[방어 준비] {Ally.UnitName} → {guardSkill.skillName}");
     }
 
     private void CancelGuard()
     {
-        if (!_sel.isGuarding) return;
-        if (Ally.Deck != null && _sel.guardCardIndex >= 0)
+        var selection0 = _sel.Get(0);
+        if (!selection0.isGuarding) return;
+        if (Ally.Deck != null && selection0.guardCardIndex >= 0)
         {
             var hand = Ally.Deck.CurrentHand;
-            if (_sel.guardCardIndex < hand.Count)
+            if (selection0.guardCardIndex < hand.Count)
             {
-                OnCardOverridden?.Invoke(_sel.guardCardIndex, hand[_sel.guardCardIndex]);
-                _sel.selectedSkill = hand[_sel.guardCardIndex];
-                _sel.selectedIndex = _sel.guardCardIndex;
+                OnCardOverridden?.Invoke(0, selection0.guardCardIndex, hand[selection0.guardCardIndex]);
+                selection0.skill = hand[selection0.guardCardIndex];
+                selection0.cardIndex = selection0.guardCardIndex;
             }
         }
-        _sel.isGuarding = false;
-        _sel.guardCardIndex = -1;
+        selection0.isGuarding = false;
+        selection0.guardCardIndex = -1;
         Log("[방어 해제]");
     }
 
@@ -323,10 +308,11 @@ public class BattleManager : MonoBehaviour
         var ego = unit.UseEgo();
         if (ego == null) return;
 
-        _sel.selectedSkill = ego;
-        _sel.selectedIndex = -1;
-        _sel.isGuarding = false;
-        _sel.isEvading = false;
+        var selection = _sel.Get(unitIndex);
+        selection.skill = ego;
+        selection.cardIndex = -1;
+        selection.isGuarding = false;
+        selection.isEvading = false;
         Log($"[E.G.O] {unit.UnitName} → {ego.skillName} (SP -{ego.egoCost})");
         ExecuteTurn();
     }
@@ -334,26 +320,46 @@ public class BattleManager : MonoBehaviour
     public void ExecuteTurn()
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
-        if (_sel.selectedSkill == null && !_sel.isEvading && !_sel.isGuarding) { Log("[!] 스킬을 먼저 선택하세요"); return; }
+
+        bool hasAnySelection = false;
+        foreach (var pair in _sel.units)
+        {
+            if (pair.Value == null) continue;
+            if (pair.Value.skill != null || pair.Value.isEvading || pair.Value.isGuarding)
+            {
+                hasAnySelection = true;
+                break;
+            }
+        }
+
+        if (!hasAnySelection)
+        {
+            Log("[!] 스킬을 먼저 선택하세요");
+            return;
+        }
+
         StartCoroutine(ExecuteTurnCoroutine());
     }
 
     private IEnumerator ExecuteTurnCoroutine()
     {
 
-        // Guard 처리
-        bool isGuarding = _sel.isGuarding;
-        if (isGuarding)
+        var leadSelection = _sel.Get(0);
+
+        if (leadSelection.isGuarding)
         {
-            if (Ally.Deck != null && _sel.guardCardIndex >= 0)
-                Ally.Deck.UseCard(_sel.guardCardIndex);
-            int shieldPower = CoinCalculator.RollPower(_sel.selectedSkill, _sel.selectedSkill.coinCount, Ally.CoinHeadsChance);
-            Ally.ApplyShield(shieldPower);
-            Log($"[방어] {Ally.UnitName} 방어 발동! 방어막 {shieldPower}");
+            if (Ally.Deck != null && leadSelection.guardCardIndex >= 0)
+                Ally.Deck.UseCard(leadSelection.guardCardIndex);
+            if (leadSelection.skill != null)
+            {
+                int shieldPower = CoinCalculator.RollPower(leadSelection.skill, leadSelection.skill.coinCount, Ally.CoinHeadsChance);
+                Ally.ApplyShield(shieldPower);
+                Log($"[방어] {Ally.UnitName} 방어 발동! 방어막 {shieldPower}");
+            }
         }
-        else if (Ally.Deck != null && _sel.selectedIndex >= 0)
+        else if (Ally.Deck != null && leadSelection.cardIndex >= 0 && leadSelection.skill != null)
         {
-            _sel.selectedSkill = Ally.Deck.UseCard(_sel.selectedIndex);
+            leadSelection.skill = Ally.Deck.UseCard(leadSelection.cardIndex);
         }
 
         // 상태 전이
@@ -374,9 +380,7 @@ public class BattleManager : MonoBehaviour
         // ── ActionBuilder로 행동 목록 조립 ──
         var actions = _actionBuilder.Build(
             allyUnits, enemyUnits,
-            (!_sel.isEvading && !isGuarding && !Ally.IsStaggered) ? _sel.selectedSkill : null,
-            _sel.selectedIndex,
-            _sel.unitSelectedSkills, _sel.unitSelectedIndices, _sel.unitTargets,
+            BuildSelectedSkills(), BuildSelectedIndices(), BuildSelectedTargets(),
             GetRandomAliveEnemy, GetRandomAliveAlly, Log);
 
         // 속도 다이스 표시 갱신
@@ -412,8 +416,8 @@ public class BattleManager : MonoBehaviour
                 pair.defender.actor, pair.defender.skill,
                 pair.attacker.speed, pair.defender.speed);
             OnClashResolved?.Invoke(clash);
-            _turnExecutor.ExecuteClashDamage(clash, Ally, Enemy);
-            _turnExecutor.ApplyClashSideEffects(clash, Ally, Enemy);
+            _turnExecutor.ExecuteClashDamage(clash, pair.attacker.actor, pair.defender.actor);
+            _turnExecutor.ApplyClashSideEffects(clash, pair.attacker.actor, pair.defender.actor);
             LogClashResult(clash);
             yield return new WaitForSeconds(0.5f);
         }
@@ -425,12 +429,16 @@ public class BattleManager : MonoBehaviour
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
 
-            // 회피 판정
-            if (allyUnits.Contains(action.target) && _sel.isEvading && _sel.evadeSkill != null)
+            if (allyUnits.Contains(action.target))
             {
-                _turnExecutor.ExecuteEvade(action, _sel.evadeSkill, Ally);
-                yield return new WaitForSeconds(0.4f);
-                continue;
+                int targetIndex = allyUnits.IndexOf(action.target);
+                var targetSelection = _sel.Get(targetIndex);
+                if (targetSelection.isEvading && targetSelection.evadeSkill != null)
+                {
+                    _turnExecutor.ExecuteEvade(action, targetSelection.evadeSkill, action.target);
+                    yield return new WaitForSeconds(0.4f);
+                    continue;
+                }
             }
 
             _turnExecutor.ExecuteUnopposed(action);
@@ -479,6 +487,34 @@ public class BattleManager : MonoBehaviour
             _fsm.TransitionTo(BattleState.SkillSelect);
             OnStateChanged?.Invoke(_fsm.Current);
         }
+    }
+
+
+    private Dictionary<int, SkillData> BuildSelectedSkills()
+    {
+        var map = new Dictionary<int, SkillData>();
+        foreach (var pair in _sel.units)
+            if (pair.Value != null && pair.Value.skill != null)
+                map[pair.Key] = pair.Value.skill;
+        return map;
+    }
+
+    private Dictionary<int, int> BuildSelectedIndices()
+    {
+        var map = new Dictionary<int, int>();
+        foreach (var pair in _sel.units)
+            if (pair.Value != null && pair.Value.cardIndex >= 0)
+                map[pair.Key] = pair.Value.cardIndex;
+        return map;
+    }
+
+    private Dictionary<int, Unit> BuildSelectedTargets()
+    {
+        var map = new Dictionary<int, Unit>();
+        foreach (var pair in _sel.units)
+            if (pair.Value != null && pair.Value.target != null)
+                map[pair.Key] = pair.Value.target;
+        return map;
     }
 
     private Unit GetRandomAliveEnemy()
