@@ -14,21 +14,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   unitName: "\uB3C8\uD0A4\uD638\uD14C"
   maxHP: 160
-  minSpeed: 2
-  maxSpeed: 4
+  minSpeed: 3
+  maxSpeed: 6
   skillSlot:
   - {fileID: 11400000, guid: 3502780fdf658ef45b44c03da56c59a6, type: 2}
   - {fileID: 11400000, guid: d03f026ee74199f449aa49724c14087d, type: 2}
   - {fileID: 11400000, guid: 26d6d214004cf3d4f9382de1cfcd30da, type: 2}
   - {fileID: 11400000, guid: f4b72f19fbd355845985942a6bff8f9e, type: 2}
-  slashResist: 2
+  slashResist: 1
   pierceResist: 0.5
-  bluntResist: 1
-  staggerThreshold1: 0.6
-  staggerThreshold2: 0.3
-  staggerThreshold3: 0.15
+  bluntResist: 1.5
+  staggerThreshold1: 0.7
+  staggerThreshold2: 0.4
+  staggerThreshold3: 0.2
   level: 15
-  baseHP: 130
+  baseHP: 33
   hpPerLevel: 8.5
-  offenseMod: -1
-  defenseMod: 1
+  offenseMod: 0
+  defenseMod: 0

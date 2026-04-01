@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f733b6fb2d88fed4794b4a4a965673f7, type: 3}
   m_Name: "\uB3C8\uD0A4\uD638\uD14C2"
   m_EditorClassIdentifier: 
-  skillName: "\uC9C8\uC8FC \uB3CC\uACA9"
+  skillName: "\uBAA8\uC544 \uCC0C\uB974\uAE30"
   skillType: 0
   damageType: 1
   cardArtwork: {fileID: -3750081564627329511, guid: 95e9a579b1c21a142a71ca2d8903e320, type: 3}

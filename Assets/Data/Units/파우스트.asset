@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: "\uD30C\uC6B0\uC2A4\uD2B8"
   m_EditorClassIdentifier: 
   unitName: "\uD30C\uC6B0\uC2A4\uD2B8"
-  maxHP: 160
+  maxHP: 258
   minSpeed: 2
   maxSpeed: 4
   skillSlot:
-  - {fileID: 11400000, guid: d508bc347b3657c409c96b807e64fcec, type: 2}
-  - {fileID: 11400000, guid: b48544be3b70ae74fa3159f038a0e9cc, type: 2}
   - {fileID: 11400000, guid: f862c860b48f4684db99479434996462, type: 2}
+  - {fileID: 11400000, guid: b48544be3b70ae74fa3159f038a0e9cc, type: 2}
+  - {fileID: 11400000, guid: d508bc347b3657c409c96b807e64fcec, type: 2}
   - {fileID: 11400000, guid: f4b72f19fbd355845985942a6bff8f9e, type: 2}
   slashResist: 2
   pierceResist: 0.5

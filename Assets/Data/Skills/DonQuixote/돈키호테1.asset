@@ -12,14 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f733b6fb2d88fed4794b4a4a965673f7, type: 3}
   m_Name: "\uB3C8\uD0A4\uD638\uD14C1"
   m_EditorClassIdentifier: 
-  skillName: "\uB9C8\uC0C1\uC2DC\uD569"
+  skillName: "\uCC0C\uB974\uAE30"
   skillType: 0
   damageType: 1
   cardArtwork: {fileID: 3002244159780868294, guid: e3305ef379ed6ee43a19cd82f5790f3d, type: 3}
   basePower: 4
   coinCount: 1
   coinPower: 7
-  inflictStatus: 1
-  statusPotency: 1
-  statusCount: 1
+  inflictStatus: 0
+  statusPotency: 0
+  statusCount: 0
   egoCost: 0
