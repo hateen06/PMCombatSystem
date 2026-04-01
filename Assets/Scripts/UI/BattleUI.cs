@@ -353,6 +353,11 @@ public class BattleUI : MonoBehaviour
 
     private void ApplyPresentationMode()
     {
+        if (allySPText != null) allySPText.gameObject.SetActive(false);
+        if (enemySPText != null) enemySPText.gameObject.SetActive(false);
+        if (allySPFill != null) allySPFill.gameObject.SetActive(false);
+        if (enemySPFill != null) enemySPFill.gameObject.SetActive(false);
+
         if (showcaseMode)
         {
             if (logPanelRoot != null) logPanelRoot.SetActive(false);
