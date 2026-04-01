@@ -115,6 +115,33 @@ public class TurnResolverTest
     }
 
     [Test]
+    public void FasterInterceptorLeavesSlowerAllyAsOneSidedAttack()
+    {
+        var go1 = new GameObject("FastAlly");
+        var fastAlly = go1.AddComponent<Unit>();
+        var go2 = new GameObject("SlowAlly");
+        var slowAlly = go2.AddComponent<Unit>();
+        var go3 = new GameObject("Enemy");
+        var enemy = go3.AddComponent<Unit>();
+        var skill = ScriptableObject.CreateInstance<SkillData>();
+        skill.skillType = SkillType.Attack;
+
+        var fastAction = new TurnAction(fastAlly, skill, enemy, 7, true);
+        var slowAction = new TurnAction(slowAlly, skill, enemy, 2, true);
+        var enemyAction = new TurnAction(enemy, skill, slowAlly, 4, false);
+
+        var plan = TurnResolver.Plan(new List<TurnAction> { fastAction, slowAction, enemyAction });
+        Assert.AreEqual(1, plan.clashes.Count);
+        Assert.AreEqual(1, plan.unopposed.Count);
+        Assert.AreSame(slowAction, plan.unopposed[0]);
+
+        Object.DestroyImmediate(skill);
+        Object.DestroyImmediate(go1);
+        Object.DestroyImmediate(go2);
+        Object.DestroyImmediate(go3);
+    }
+
+    [Test]
     public void EmptyList_NoCrash()
     {
         var plan = TurnResolver.Plan(new List<TurnAction>());

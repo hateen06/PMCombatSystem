@@ -74,4 +74,16 @@ public class ClashResolverTest
         Assert.AreEqual(3, result.remainingCoins);
         Assert.AreEqual(3, result.followUpHitPowers.Count);
     }
+
+    [Test]
+    public void ClashTracksStartingAndRemainingCoinsForUi()
+    {
+        var atk = MakeSkill(5, 3, 2);
+        var def = MakeSkill(1, 1, 1);
+        var result = ClashResolver.Resolve("A", atk, 50, 5, "B", def, 50, 3);
+        Assert.AreEqual(3, result.attackerStartingCoins);
+        Assert.AreEqual(1, result.defenderStartingCoins);
+        Assert.AreEqual(3, result.attackerRemainingCoins);
+        Assert.AreEqual(0, result.defenderRemainingCoins);
+    }
 }
