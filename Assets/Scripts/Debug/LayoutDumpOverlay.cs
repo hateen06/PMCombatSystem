@@ -5,7 +5,10 @@ public class LayoutDumpOverlay : MonoBehaviour
     [SerializeField] private LayoutDumper dumper;
     [SerializeField] private bool visible = true;
 
+    public bool Visible => visible;
+
     public void Toggle() => visible = !visible;
+    public void SetVisible(bool value) => visible = value;
 
     private void OnGUI()
     {

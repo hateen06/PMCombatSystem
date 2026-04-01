@@ -162,7 +162,7 @@ public class HPBar : MonoBehaviour
         hpText.color = Color.white;
         hpText.outlineWidth = 0.18f;
         hpText.outlineColor = new Color32(0, 0, 0, 220);
-        hpText.enableWordWrapping = false;
+        hpText.textWrappingMode = TextWrappingModes.NoWrap;
         hpText.text = string.Empty;
     }
 

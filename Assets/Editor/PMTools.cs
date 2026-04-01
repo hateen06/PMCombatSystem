@@ -1,12 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using System.Collections.Generic;
 
-/// <summary>
-/// 에디터 유틸리티 도구.
-/// Unity 메뉴 Tools/PM 에서 접근 가능.
-/// </summary>
 public static class PMTools
 {
     [MenuItem("Tools/PM/프로젝트 상태 확인")]
@@ -15,6 +10,39 @@ public static class PMTools
         var scene = EditorSceneManager.GetActiveScene();
         var goCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
         Debug.Log($"Scene: {scene.name} | Objects: {goCount} | Compile Error: {EditorUtility.scriptCompilationFailed}");
+    }
+
+    [MenuItem("Tools/PM/레이아웃 덤프")]
+    public static void DumpLayout()
+    {
+        var dumper = EnsureLayoutDumper();
+        if (dumper == null)
+        {
+            Debug.LogWarning("LayoutDumper not found");
+            return;
+        }
+
+        dumper.Dump();
+        Debug.Log("Layout dump saved");
+    }
+
+    [MenuItem("Tools/PM/레이아웃 오버레이 토글")]
+    public static void ToggleLayoutOverlay()
+    {
+        var dumper = EnsureLayoutDumper();
+        if (dumper == null)
+        {
+            Debug.LogWarning("LayoutDumper not found");
+            return;
+        }
+
+        var overlay = dumper.GetComponent<LayoutDumpOverlay>();
+        if (overlay == null)
+            overlay = Undo.AddComponent<LayoutDumpOverlay>(dumper.gameObject);
+
+        overlay.SetVisible(!overlay.Visible);
+        EditorUtility.SetDirty(overlay);
+        Debug.Log($"Layout overlay: {(overlay.Visible ? "ON" : "OFF")}");
     }
 
     [MenuItem("Tools/PM/스프라이트 FullRect 수정")]
@@ -46,5 +74,17 @@ public static class PMTools
     {
         EditorSceneManager.SaveOpenScenes();
         Debug.Log("Saved");
+    }
+
+    private static LayoutDumper EnsureLayoutDumper()
+    {
+        var dumper = Object.FindFirstObjectByType<LayoutDumper>();
+        if (dumper != null) return dumper;
+
+        var go = new GameObject("LayoutDumper");
+        Undo.RegisterCreatedObjectUndo(go, "Create LayoutDumper");
+        dumper = go.AddComponent<LayoutDumper>();
+        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+        return dumper;
     }
 }
