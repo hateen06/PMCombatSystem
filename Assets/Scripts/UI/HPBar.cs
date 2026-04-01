@@ -9,6 +9,7 @@ public class HPBar : MonoBehaviour
     [SerializeField] private float tweenDuration = 0.4f;
 
     [SerializeField] private TMP_Text shieldText;
+    [SerializeField] private TMP_Text hpText;
 
     private Unit _target;
     private Tween _currentTween;
@@ -124,6 +125,10 @@ public class HPBar : MonoBehaviour
     {
         if (_target == null || fillRect == null) return;
 
+        EnsureHPText();
+        if (hpText != null)
+            hpText.text = $"{_target.CurrentHP}/{_target.MaxHP}";
+
         float targetRatio = Mathf.Clamp01(_target.HPRatio);
 
         _currentTween?.Kill();
@@ -139,6 +144,28 @@ public class HPBar : MonoBehaviour
             tweenDuration
         ).SetEase(Ease.OutQuad);
     }
+    private void EnsureHPText()
+    {
+        if (hpText != null) return;
+
+        var go = new GameObject("HPText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        go.transform.SetParent(transform, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 1f);
+        rt.anchorMax = new Vector2(0.5f, 1f);
+        rt.anchoredPosition = new Vector2(0f, 14f);
+        rt.sizeDelta = new Vector2(96f, 20f);
+
+        hpText = go.GetComponent<TextMeshProUGUI>();
+        hpText.fontSize = 14;
+        hpText.alignment = TextAlignmentOptions.Center;
+        hpText.color = Color.white;
+        hpText.outlineWidth = 0.18f;
+        hpText.outlineColor = new Color32(0, 0, 0, 220);
+        hpText.enableWordWrapping = false;
+        hpText.text = string.Empty;
+    }
+
     public void OnHit()
     {
         Refresh();

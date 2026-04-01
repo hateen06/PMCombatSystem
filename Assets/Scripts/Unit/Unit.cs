@@ -14,6 +14,7 @@ public class Unit : MonoBehaviour
     public System.Action OnStatusChanged;
 
     public string UnitName => _combat.unitName;
+    public int Level => unitData != null ? unitData.level : 0;
     public int CurrentHP => _combat.currentHP;
     public int MaxHP => _combat.maxHP;
     public bool IsAlive => _combat.isAlive;

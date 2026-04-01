@@ -67,30 +67,6 @@ public class BattleUI : MonoBehaviour
 
     private void Start()
     {
-        // 스킬 카드 초기화
-        if (skillCards != null && skillCards.Length > 0 && battleManager != null)
-        {
-            for (int i = 0; i < skillCards.Length; i++)
-            {
-                if (skillCards[i] == null) continue;
-                int index = i;
-
-                // 카드 버튼 클릭 연결
-                var btn = skillCards[i].GetComponentInChildren<Button>();
-                if (btn != null)
-                    btn.onClick.AddListener(() => OnSkillCardClicked(0, index));
-
-                // 우클릭 → 방어 (아군1 = 이상)
-                int rIdx = i;
-                skillCards[i].OnRightClicked = () => OnSkillCardRightClicked(0, rIdx);
-            }
-
-            RefreshSkillCards();
-            BindObservedData();
-            EnsureSpeedTimeline();
-            CreateColorVeils();
-        }
-
         var cardGroups = AllyCardGroups;
         for (int unitIndex = 0; unitIndex < cardGroups.Count; unitIndex++)
         {
@@ -107,6 +83,11 @@ public class BattleUI : MonoBehaviour
                 group[i].OnRightClicked = () => OnSkillCardRightClicked(capturedUnitIndex, capturedCardIndex);
             }
         }
+
+        RefreshSkillCards();
+        BindObservedData();
+        EnsureSpeedTimeline();
+        CreateColorVeils();
 
         // 레거시 버튼 OnClick (카드 없을 때 폴백)
         if (skillButtons != null)
@@ -388,25 +369,32 @@ public class BattleUI : MonoBehaviour
     {
         if (battleManager == null) return;
 
-        var allyRenderer = battleManager.Ally != null ? battleManager.Ally.GetComponent<SpriteRenderer>() : null;
-        var enemyRenderer = battleManager.Enemy != null ? battleManager.Enemy.GetComponent<SpriteRenderer>() : null;
-
         Color dim = new Color(0.65f, 0.65f, 0.65f, 1f);
         Color normal = Color.white;
         Color highlight = new Color(1f, 0.92f, 0.65f, 1f);
 
-        if (allyRenderer != null) allyRenderer.color = normal;
-        if (enemyRenderer != null) enemyRenderer.color = normal;
-
-        if (target == battleManager.Ally)
+        foreach (var ally in battleManager.AllyUnits)
         {
-            if (allyRenderer != null) allyRenderer.color = highlight;
-            if (enemyRenderer != null) enemyRenderer.color = dim;
+            var sr = ally != null ? ally.GetComponent<SpriteRenderer>() : null;
+            if (sr != null) sr.color = normal;
         }
-        else if (target == battleManager.Enemy)
+
+        foreach (var enemy in battleManager.EnemyUnits)
         {
-            if (enemyRenderer != null) enemyRenderer.color = highlight;
-            if (allyRenderer != null) allyRenderer.color = dim;
+            var sr = enemy != null ? enemy.GetComponent<SpriteRenderer>() : null;
+            if (sr != null) sr.color = normal;
+        }
+
+        if (source != null)
+        {
+            var sourceRenderer = source.GetComponent<SpriteRenderer>();
+            if (sourceRenderer != null) sourceRenderer.color = dim;
+        }
+
+        if (target != null)
+        {
+            var targetRenderer = target.GetComponent<SpriteRenderer>();
+            if (targetRenderer != null) targetRenderer.color = highlight;
         }
     }
 
@@ -522,7 +510,7 @@ public class BattleUI : MonoBehaviour
 
         if (ally != null)
         {
-            if (allyNameText != null) allyNameText.text = ally.UnitName;
+            if (allyNameText != null) allyNameText.text = FormatUnitLabel(ally);
             if (allyHPText != null) allyHPText.text = $"{ally.CurrentHP}/{ally.MaxHP}";
             if (allySPText != null)
             {
@@ -543,7 +531,7 @@ public class BattleUI : MonoBehaviour
 
         if (enemy != null)
         {
-            if (enemyNameText != null) enemyNameText.text = enemy.UnitName;
+            if (enemyNameText != null) enemyNameText.text = FormatUnitLabel(enemy);
             if (enemyHPText != null) enemyHPText.text = $"{enemy.CurrentHP}/{enemy.MaxHP}";
             if (enemySPText != null)
             {
@@ -561,6 +549,31 @@ public class BattleUI : MonoBehaviour
                     : new Color(1f, 0.45f, 0.45f);
             }
         }
+
+        UpdateAdditionalNameplate("아군2 이름", battleManager.AllyUnits, 1);
+        UpdateAdditionalNameplate("아군3 이름", battleManager.AllyUnits, 2);
+        UpdateAdditionalNameplate("적2 이름", battleManager.EnemyUnits, 1);
+        UpdateAdditionalNameplate("적3 이름", battleManager.EnemyUnits, 2);
+    }
+
+    private string FormatUnitLabel(Unit unit)
+    {
+        if (unit == null) return string.Empty;
+        return $"{unit.UnitName} Lv.{unit.Level}";
+    }
+
+    private void UpdateAdditionalNameplate(string objectName, IReadOnlyList<Unit> units, int index)
+    {
+        var label = GameObject.Find(objectName)?.GetComponent<TextMeshProUGUI>();
+        if (label == null) return;
+
+        if (units == null || index < 0 || index >= units.Count || units[index] == null)
+        {
+            label.text = string.Empty;
+            return;
+        }
+
+        label.text = FormatUnitLabel(units[index]);
     }
 
     // ── 데미지 팝업 ──
