@@ -22,9 +22,11 @@ public class ClashResult
     public string log;
     public SkillData attackerSkill;
     public SkillData defenderSkill;
-
     public int winnerSPChange;
+    public int loserSPChange;
     public bool winnerIsAttacker;
+    public int remainingCoins;
+    public List<int> followUpHitPowers = new();
     public List<StatusApplication> statusApplications = new();
     public List<(bool isAttacker, int bleedDamage)> bleedResults = new();
 }

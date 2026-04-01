@@ -55,11 +55,23 @@ public class ClashResolverTest
     }
 
     [Test]
-    public void WinnerSPChange_Is10()
+    public void ClashSetsWinnerAndLoserSPChanges()
     {
         var atk = MakeSkill(10, 3, 5);
         var def = MakeSkill(2, 1, 1);
         var result = ClashResolver.Resolve("A", atk, 50, 5, "B", def, 50, 3);
         Assert.AreEqual(10, result.winnerSPChange);
+        Assert.AreEqual(-10, result.loserSPChange);
+    }
+
+    [Test]
+    public void RemainingCoinsBecomeFollowUpHits()
+    {
+        var atk = MakeSkill(5, 3, 2);
+        var def = MakeSkill(1, 1, 1);
+        var result = ClashResolver.Resolve("A", atk, 50, 5, "B", def, 50, 3);
+        Assert.AreEqual(ClashOutcome.AttackerWin, result.outcome);
+        Assert.AreEqual(3, result.remainingCoins);
+        Assert.AreEqual(3, result.followUpHitPowers.Count);
     }
 }

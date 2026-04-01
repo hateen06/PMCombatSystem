@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class ActionBuilder
@@ -13,6 +14,8 @@ public class ActionBuilder
         System.Action<string> log)
     {
         var actions = new List<TurnAction>();
+        var allySpeeds = RollSpeeds(allyUnits);
+        var enemySpeeds = RollSpeeds(enemyUnits);
 
         for (int ui = 0; ui < allyUnits.Count; ui++)
         {
@@ -38,11 +41,11 @@ public class ActionBuilder
             if (cardIndex >= 0 && unit.Deck != null)
                 unit.Deck.UseCard(cardIndex);
 
-            int speed = unit.RollSpeed();
+            int speed = allySpeeds[unit];
             Unit target = unitTargets.ContainsKey(ui) ? unitTargets[ui] : getRandomAliveEnemy();
             if (target != null && !target.IsAlive) target = getRandomAliveEnemy();
             if (target != null)
-                actions.Add(new TurnAction(unit, unitSkill, target, speed));
+                actions.Add(new TurnAction(unit, unitSkill, target, speed, true));
         }
 
         for (int ei = 0; ei < enemyUnits.Count; ei++)
@@ -53,10 +56,10 @@ public class ActionBuilder
             var skill = PickEnemySkillFor(enemy);
             if (skill == null) continue;
 
-            int speed = enemy.RollSpeed();
-            var target = getRandomAliveAlly();
+            int speed = enemySpeeds[enemy];
+            var target = PickEnemyTarget(allyUnits, allySpeeds) ?? getRandomAliveAlly();
             if (target != null)
-                actions.Add(new TurnAction(enemy, skill, target, speed));
+                actions.Add(new TurnAction(enemy, skill, target, speed, false));
         }
 
         return actions;
@@ -74,5 +77,25 @@ public class ActionBuilder
         var slots = enemy.SkillSlots;
         if (slots == null || slots.Length == 0) return null;
         return slots[Random.Range(0, slots.Length)];
+    }
+
+    private Dictionary<Unit, int> RollSpeeds(List<Unit> units)
+    {
+        var map = new Dictionary<Unit, int>();
+        for (int i = 0; i < units.Count; i++)
+        {
+            var unit = units[i];
+            if (unit == null || !unit.IsAlive) continue;
+            map[unit] = unit.RollSpeed();
+        }
+        return map;
+    }
+
+    private Unit PickEnemyTarget(List<Unit> allyUnits, Dictionary<Unit, int> allySpeeds)
+    {
+        return allyUnits
+            .Where(u => u != null && u.IsAlive)
+            .OrderBy(u => allySpeeds.TryGetValue(u, out var speed) ? speed : int.MaxValue)
+            .FirstOrDefault();
     }
 }

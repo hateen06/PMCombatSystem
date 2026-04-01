@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class LayoutDumper : MonoBehaviour
 {
@@ -25,8 +26,8 @@ public class LayoutDumper : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(dumpKey)) Dump();
-        if (Input.GetKeyDown(overlayKey) && _overlay != null) _overlay.Toggle();
+        if (WasPressedThisFrame(dumpKey)) Dump();
+        if (WasPressedThisFrame(overlayKey) && _overlay != null) _overlay.Toggle();
     }
 
     public void Dump()
@@ -268,6 +269,19 @@ public class LayoutDumper : MonoBehaviour
             sb.AppendLine("- " + issue.type + " (" + issue.severity.ToString("0.00") + "): " + issue.message);
         }
         return sb.ToString();
+    }
+
+    private bool WasPressedThisFrame(KeyCode keyCode)
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return false;
+
+        return keyCode switch
+        {
+            KeyCode.F8 => keyboard.f8Key.wasPressedThisFrame,
+            KeyCode.F9 => keyboard.f9Key.wasPressedThisFrame,
+            _ => false,
+        };
     }
 
     private string GetPath(Transform target)
