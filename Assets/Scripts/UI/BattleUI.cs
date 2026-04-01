@@ -32,9 +32,9 @@ public class BattleUI : MonoBehaviour
     [SerializeField] private GameObject breakdownPanelRoot;
 
     [Header("스킬 카드")]
-    [SerializeField] private SkillCardUI[] skillCards;       // 아군1 카드
-    [SerializeField] private SkillCardUI[] skillCards2;      // 아군2 카드
-    [SerializeField] private SkillCardUI[] skillCards3;      // 아군3 카드
+    [SerializeField] private SkillCardUI[] skillCards;
+    [SerializeField] private SkillCardUI[] skillCards2;
+    [SerializeField] private SkillCardUI[] skillCards3;
     [SerializeField] private Button executeButton;
 
     [Header("데미지 팝업")]
@@ -61,6 +61,7 @@ public class BattleUI : MonoBehaviour
     private readonly HashSet<Unit> _boundUnits = new HashSet<Unit>();
     private readonly Dictionary<Unit, ResistanceIndicatorUI> _resistIndicators = new();
     private readonly Dictionary<Unit, SpeedDiceUI> _enemyIntentIcons = new();
+    private List<SkillCardUI[]> AllyCardGroups => new() { skillCards, skillCards2, skillCards3 };
 
     private int _selectedIndex = -1;
 
@@ -77,7 +78,7 @@ public class BattleUI : MonoBehaviour
                 // 카드 버튼 클릭 연결
                 var btn = skillCards[i].GetComponentInChildren<Button>();
                 if (btn != null)
-                    btn.onClick.AddListener(() => OnSkillCardClicked(index));
+                    btn.onClick.AddListener(() => OnSkillCardClicked(0, index));
 
                 // 우클릭 → 방어 (아군1 = 이상)
                 int rIdx = i;
@@ -90,35 +91,20 @@ public class BattleUI : MonoBehaviour
             CreateColorVeils();
         }
 
-        // 아군2 스킬 카드 초기화
-        if (skillCards2 != null && skillCards2.Length > 0 && battleManager != null)
+        var cardGroups = AllyCardGroups;
+        for (int unitIndex = 0; unitIndex < cardGroups.Count; unitIndex++)
         {
-            for (int i = 0; i < skillCards2.Length; i++)
+            var group = cardGroups[unitIndex];
+            if (group == null || group.Length == 0 || battleManager == null) continue;
+            for (int i = 0; i < group.Length; i++)
             {
-                if (skillCards2[i] == null) continue;
-                int index = i;
-                var btn = skillCards2[i].GetComponentInChildren<Button>();
+                if (group[i] == null) continue;
+                int capturedUnitIndex = unitIndex;
+                int capturedCardIndex = i;
+                var btn = group[i].GetComponentInChildren<Button>();
                 if (btn != null)
-                    btn.onClick.AddListener(() => OnSkillCard2Clicked(index));
-
-                int rIdx2 = i;
-                skillCards2[i].OnRightClicked = () => OnSkillCardRightClicked(1, rIdx2);
-            }
-        }
-
-        // 아군3 스킬 카드 초기화
-        if (skillCards3 != null && skillCards3.Length > 0 && battleManager != null)
-        {
-            for (int i = 0; i < skillCards3.Length; i++)
-            {
-                if (skillCards3[i] == null) continue;
-                int index = i;
-                var btn = skillCards3[i].GetComponentInChildren<Button>();
-                if (btn != null)
-                    btn.onClick.AddListener(() => OnSkillCard3Clicked(index));
-
-                int rIdx3 = i;
-                skillCards3[i].OnRightClicked = () => OnSkillCardRightClicked(2, rIdx3);
+                    btn.onClick.AddListener(() => OnSkillCardClicked(capturedUnitIndex, capturedCardIndex));
+                group[i].OnRightClicked = () => OnSkillCardRightClicked(capturedUnitIndex, capturedCardIndex);
             }
         }
 
@@ -139,16 +125,21 @@ public class BattleUI : MonoBehaviour
         ApplyPresentationMode();
     }
 
-    private void OnSkillCardClicked(int index)
+    private void OnSkillCardClicked(int unitIndex, int cardIndex)
     {
-        _selectedIndex = index;
+        _selectedIndex = cardIndex;
 
-        // 선택 시각 피드백
-        for (int i = 0; i < skillCards.Length; i++)
-            if (skillCards[i] != null)
-                skillCards[i].SetSelected(i == index);
+        var cardGroups = AllyCardGroups;
+        if (unitIndex >= 0 && unitIndex < cardGroups.Count)
+        {
+            var group = cardGroups[unitIndex];
+            if (group != null)
+                for (int i = 0; i < group.Length; i++)
+                    if (group[i] != null)
+                        group[i].SetSelected(i == cardIndex);
+        }
 
-        OnSkillButton(index);
+        battleManager?.SelectSkillForUnit(unitIndex, cardIndex);
     }
 
     private void OnEnable()
@@ -167,8 +158,6 @@ public class BattleUI : MonoBehaviour
         battleManager.OnEnemyIntentRevealed += OnEnemyIntentRevealed;
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
-        battleManager.OnCardOverridden2 += OnCardOverridden2;
-        battleManager.OnCardOverridden3 += OnCardOverridden3;
         BindObservedData();
     }
 
@@ -188,8 +177,6 @@ public class BattleUI : MonoBehaviour
         battleManager.OnEnemyIntentRevealed -= OnEnemyIntentRevealed;
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
-        battleManager.OnCardOverridden2 -= OnCardOverridden2;
-        battleManager.OnCardOverridden3 -= OnCardOverridden3;
         UnbindObservedData();
     }
 
@@ -323,17 +310,13 @@ public class BattleUI : MonoBehaviour
 
     private void RefreshSkillCards()
     {
-        RefreshCardSet(skillCards, battleManager?.Ally);
-
-        Unit ally2 = null;
-        if (battleManager != null && battleManager.AllyUnits != null && battleManager.AllyUnits.Count > 1)
-            ally2 = battleManager.AllyUnits[1];
-        RefreshCardSet(skillCards2, ally2);
-
-        Unit ally3 = null;
-        if (battleManager != null && battleManager.AllyUnits != null && battleManager.AllyUnits.Count > 2)
-            ally3 = battleManager.AllyUnits[2];
-        RefreshCardSet(skillCards3, ally3);
+        if (battleManager == null) return;
+        var cardGroups = AllyCardGroups;
+        for (int i = 0; i < cardGroups.Count; i++)
+        {
+            Unit unit = i < battleManager.AllyUnits.Count ? battleManager.AllyUnits[i] : null;
+            RefreshCardSet(cardGroups[i], unit);
+        }
     }
 
     private void RefreshCardSet(SkillCardUI[] cards, Unit unit)
@@ -610,59 +593,22 @@ public class BattleUI : MonoBehaviour
     {
         battleManager?.SelectDefenseForUnit(unitIndex, cardIndex);
 
-        // 파우스트 카드 비주얼 직접 갱신 (OnCardOverridden은 아군1 기준)
-        if (unitIndex > 0 && skillCards2 != null && cardIndex < skillCards2.Length)
-        {
-            // 현재 상태 확인 후 갱신은 OnCardOverridden에서 처리
-        }
     }
 
-    private void OnSkillCard2Clicked(int index)
+    private void OnCardOverridden(int unitIndex, int cardIndex, SkillData newSkill)
     {
-        if (skillCards2 != null)
-            for (int i = 0; i < skillCards2.Length; i++)
-                if (skillCards2[i] != null)
-                    skillCards2[i].SetSelected(i == index);
-
-        battleManager?.SelectSkillForUnit(1, index);
-    }
-
-    private void OnSkillCard3Clicked(int index)
-    {
-        if (skillCards3 != null)
-            for (int i = 0; i < skillCards3.Length; i++)
-                if (skillCards3[i] != null)
-                    skillCards3[i].SetSelected(i == index);
-
-        battleManager?.SelectSkillForUnit(2, index);
-    }
-
-    private void OnCardOverridden(int cardIndex, SkillData newSkill)
-    {
-        if (skillCards != null && cardIndex >= 0 && cardIndex < skillCards.Length)
-            if (skillCards[cardIndex] != null)
-                skillCards[cardIndex].Setup(newSkill);
-    }
-
-    private void OnCardOverridden2(int cardIndex, SkillData newSkill)
-    {
-        if (skillCards2 != null && cardIndex >= 0 && cardIndex < skillCards2.Length)
-            if (skillCards2[cardIndex] != null)
-                skillCards2[cardIndex].Setup(newSkill);
-    }
-
-    private void OnCardOverridden3(int cardIndex, SkillData newSkill)
-    {
-        if (skillCards3 != null && cardIndex >= 0 && cardIndex < skillCards3.Length)
-            if (skillCards3[cardIndex] != null)
-                skillCards3[cardIndex].Setup(newSkill);
+        var cardGroups = AllyCardGroups;
+        if (unitIndex < 0 || unitIndex >= cardGroups.Count) return;
+        var group = cardGroups[unitIndex];
+        if (group == null || cardIndex < 0 || cardIndex >= group.Length) return;
+        if (group[cardIndex] != null) group[cardIndex].Setup(newSkill);
     }
 
     // ── 버튼에서 호출 (Inspector OnClick에 연결) ──
 
     public void OnSkillButton(int index)
     {
-        battleManager?.SelectSkill(index);
+        battleManager?.SelectSkillForUnit(0, index);
     }
 
     public void OnExecuteButton()

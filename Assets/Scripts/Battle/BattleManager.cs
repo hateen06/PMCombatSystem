@@ -39,9 +39,7 @@ public class BattleManager : MonoBehaviour
     public System.Action<Unit, Unit> OnClashPairHighlighted;
     public System.Action<Unit, SkillData> OnEnemyIntentRevealed;
     public System.Action OnHandDrawn;
-    public System.Action<int, SkillData> OnCardOverridden;
-    public System.Action<int, SkillData> OnCardOverridden2;
-    public System.Action<int, SkillData> OnCardOverridden3;
+    public System.Action<int, int, SkillData> OnCardOverridden;
     public System.Action<Unit, Unit> OnTargetAssigned;
 
     // ── 내부 상태 ──

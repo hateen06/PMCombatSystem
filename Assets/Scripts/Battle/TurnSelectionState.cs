@@ -1,34 +1,47 @@
 using System.Collections.Generic;
 
-public class TurnSelectionState
+public class UnitTurnSelection
 {
-    public SkillData selectedSkill;
+    public SkillData skill;
+    public SkillData originalSkill;
     public SkillData evadeSkill;
-    public int selectedIndex = -1;
+    public int cardIndex = -1;
     public bool isEvading;
     public bool isGuarding;
     public int guardCardIndex = -1;
+    public Unit target;
 
-    public Dictionary<int, SkillData> unitSelectedSkills = new();
-    public Dictionary<int, int> unitSelectedIndices = new();
-    public Dictionary<int, Unit> unitTargets = new();
-    public Dictionary<int, bool> unitDefenseActive = new();
-    public Dictionary<int, SkillData> unitOriginalSkill = new();
-    public Unit currentTarget;
-
-    public void Reset()
+    public void Clear()
     {
-        selectedSkill = null;
+        skill = null;
+        originalSkill = null;
         evadeSkill = null;
-        selectedIndex = -1;
+        cardIndex = -1;
         isEvading = false;
         isGuarding = false;
         guardCardIndex = -1;
-        unitSelectedSkills.Clear();
-        unitSelectedIndices.Clear();
-        unitTargets.Clear();
-        currentTarget = null;
-        unitDefenseActive.Clear();
-        unitOriginalSkill.Clear();
+        target = null;
+    }
+}
+
+public class TurnSelectionState
+{
+    public Dictionary<int, UnitTurnSelection> units = new();
+
+    public UnitTurnSelection Get(int unitIndex)
+    {
+        if (!units.TryGetValue(unitIndex, out var selection))
+        {
+            selection = new UnitTurnSelection();
+            units[unitIndex] = selection;
+        }
+        return selection;
+    }
+
+    public void Reset()
+    {
+        foreach (var pair in units)
+            pair.Value?.Clear();
+        units.Clear();
     }
 }
