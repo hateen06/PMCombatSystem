@@ -136,29 +136,33 @@ public class BattleManager : MonoBehaviour
     {
         if (!_fsm.Is(BattleState.SkillSelect)) return;
         if (target == null || !target.IsAlive) return;
+        if (!enemyUnits.Contains(target)) return;
 
         int activeAlly = -1;
         for (int i = allyUnits.Count - 1; i >= 0; i--)
         {
             var selection = _sel.Get(i);
-            if (selection.skill != null)
+            if (selection.skill != null && !selection.isGuarding && !selection.isEvading)
             {
                 activeAlly = i;
                 break;
             }
         }
         if (activeAlly < 0) activeAlly = 0;
+        if (activeAlly >= allyUnits.Count) return;
+
+        var source = allyUnits[activeAlly];
+        if (source == null || !source.IsAlive) return;
 
         var current = _sel.Get(activeAlly);
         current.target = target;
-        Log($"[타겟] {(activeAlly < allyUnits.Count ? allyUnits[activeAlly].UnitName : "?")} → {target.UnitName}");
-        OnTargetAssigned?.Invoke(activeAlly < allyUnits.Count ? allyUnits[activeAlly] : null, target);
+        Log($"[타겟] {source.UnitName} → {target.UnitName}");
+        OnTargetAssigned?.Invoke(source, target);
 
-        if (current.skill != null && activeAlly < allyUnits.Count)
-            _presenter.UpdateClashPreview(current.skill, allyUnits[activeAlly], target);
+        if (current.skill != null)
+            _presenter.UpdateClashPreview(current.skill, source, target);
 
-        if (activeAlly < allyUnits.Count)
-            OnTargetLineUpdated?.Invoke(allyUnits[activeAlly], target, false);
+        OnTargetLineUpdated?.Invoke(source, target, false);
     }
 
     // ═══════════════════════════════════════
@@ -171,31 +175,30 @@ public class BattleManager : MonoBehaviour
         if (unitIndex < 0 || unitIndex >= allyUnits.Count) return;
         var unit = allyUnits[unitIndex];
 
-        // 토글 해제
         var selection = _sel.Get(unitIndex);
         if (selection.isGuarding || selection.isEvading)
         {
+            int restoreCardIndex = selection.guardCardIndex >= 0 ? selection.guardCardIndex : selection.cardIndex;
+            if (restoreCardIndex < 0) restoreCardIndex = cardIndex;
+
             selection.isGuarding = false;
             selection.isEvading = false;
+            selection.evadeSkill = null;
+            selection.guardCardIndex = -1;
+
             SkillData orig = selection.originalSkill;
-            if (orig == null && unit.Deck != null && cardIndex < unit.Deck.CurrentHand.Count)
-                orig = unit.Deck.CurrentHand[cardIndex];
+            if (orig == null && unit.Deck != null && restoreCardIndex >= 0 && restoreCardIndex < unit.Deck.CurrentHand.Count)
+                orig = unit.Deck.CurrentHand[restoreCardIndex];
 
-            if (unitIndex == 0)
-            {
-                if (orig != null) selection.skill = orig;
-            }
-            else
-            {
-                selection.skill = null;
-            }
+            selection.skill = orig;
+            selection.cardIndex = restoreCardIndex;
 
-            if (orig != null) OnCardOverridden?.Invoke(unitIndex, cardIndex, orig);
+            if (orig != null && restoreCardIndex >= 0)
+                OnCardOverridden?.Invoke(unitIndex, restoreCardIndex, orig);
             Log($"[해제] {unit.UnitName} → 공격 복귀");
             return;
         }
 
-        // 방어/회피 스킬 찾기
         var slots = unit.SkillSlots;
         if (slots == null) return;
         SkillData defSkill = null;
@@ -203,20 +206,23 @@ public class BattleManager : MonoBehaviour
         {
             if (slots[i] == null) continue;
             if (slots[i].skillType == SkillType.Defense || slots[i].skillType == SkillType.Evade)
-            { defSkill = slots[i]; break; }
+            {
+                defSkill = slots[i];
+                break;
+            }
         }
         if (defSkill == null) { Log("[!] 방어/회피 스킬 없음"); return; }
 
         var hand = unit.Deck?.CurrentHand;
-        if (hand != null && cardIndex < hand.Count)
+        if (hand != null && cardIndex >= 0 && cardIndex < hand.Count)
             selection.originalSkill = hand[cardIndex];
 
         selection.skill = defSkill;
         selection.cardIndex = cardIndex;
+        selection.guardCardIndex = cardIndex;
         selection.isGuarding = defSkill.skillType == SkillType.Defense;
         selection.isEvading = defSkill.skillType == SkillType.Evade;
-        selection.guardCardIndex = cardIndex;
-        if (selection.isEvading) selection.evadeSkill = defSkill;
+        selection.evadeSkill = defSkill.skillType == SkillType.Evade ? defSkill : null;
 
         OnCardOverridden?.Invoke(unitIndex, cardIndex, defSkill);
         Log($"[{(defSkill.skillType == SkillType.Defense ? "방어" : "회피")}] {unit.UnitName} → {defSkill.skillName}");
@@ -225,17 +231,22 @@ public class BattleManager : MonoBehaviour
     // 레거시 호환
     public void SelectEvade(int cardIndex)
     {
+        if (!_fsm.Is(BattleState.SkillSelect)) return;
+        if (Ally == null) return;
+        if (cardIndex < 0) return;
+
+        var hand = Ally.Deck?.CurrentHand;
+        if (hand == null || cardIndex >= hand.Count) return;
+
         var selection0 = _sel.Get(0);
-        selection0.isEvading = true;
-        selection0.skill = null;
+        selection0.originalSkill = hand[cardIndex];
+        selection0.skill = hand[cardIndex];
         selection0.cardIndex = cardIndex;
-        if (Ally.Deck != null && cardIndex >= 0)
-        {
-            var hand = Ally.Deck.CurrentHand;
-            if (cardIndex < hand.Count) selection0.evadeSkill = hand[cardIndex];
-            Ally.Deck.UseCard(cardIndex);
-        }
-        Log("[회피] " + Ally.UnitName + " 회피 태세");
+        selection0.guardCardIndex = cardIndex;
+        selection0.isGuarding = false;
+        selection0.isEvading = false;
+        selection0.evadeSkill = null;
+        OnEvadeButton();
     }
 
     public void OnEvadeButton()
@@ -244,9 +255,38 @@ public class BattleManager : MonoBehaviour
         if (selection0.cardIndex < 0 && !selection0.isGuarding) return;
         int evadeIndex = selection0.isGuarding ? selection0.guardCardIndex : selection0.cardIndex;
         if (evadeIndex < 0) return;
-        CancelGuard();
+
+        if (selection0.isGuarding)
+            SelectDefenseForUnit(0, evadeIndex);
+
+        var slots = Ally.SkillSlots;
+        if (slots == null) return;
+
+        SkillData evadeSkill = null;
+        for (int i = 0; i < slots.Length; i++)
+        {
+            if (slots[i] == null) continue;
+            if (slots[i].skillType == SkillType.Evade)
+            {
+                evadeSkill = slots[i];
+                break;
+            }
+        }
+
+        if (evadeSkill == null)
+        {
+            Log("[!] 회피 스킬 없음");
+            return;
+        }
+
+        selection0.skill = evadeSkill;
+        selection0.evadeSkill = evadeSkill;
         selection0.cardIndex = evadeIndex;
-        SelectEvade(selection0.cardIndex);
+        selection0.guardCardIndex = evadeIndex;
+        selection0.isGuarding = false;
+        selection0.isEvading = true;
+        OnCardOverridden?.Invoke(0, evadeIndex, evadeSkill);
+        Log($"[회피] {Ally.UnitName} → {evadeSkill.skillName}");
         ExecuteTurn();
     }
 
@@ -343,31 +383,12 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator ExecuteTurnCoroutine()
     {
+        ApplyPreparedDefense();
 
-        var leadSelection = _sel.Get(0);
-
-        if (leadSelection.isGuarding)
-        {
-            if (Ally.Deck != null && leadSelection.guardCardIndex >= 0)
-                Ally.Deck.UseCard(leadSelection.guardCardIndex);
-            if (leadSelection.skill != null)
-            {
-                int shieldPower = CoinCalculator.RollPower(leadSelection.skill, leadSelection.skill.coinCount, Ally.CoinHeadsChance);
-                Ally.ApplyShield(shieldPower);
-                Log($"[방어] {Ally.UnitName} 방어 발동! 방어막 {shieldPower}");
-            }
-        }
-        else if (Ally.Deck != null && leadSelection.cardIndex >= 0 && leadSelection.skill != null)
-        {
-            leadSelection.skill = Ally.Deck.UseCard(leadSelection.cardIndex);
-        }
-
-        // 상태 전이
         _fsm.TransitionTo(BattleState.ClashResolve);
         OnStateChanged?.Invoke(_fsm.Current);
         _turnCount++;
 
-        // 턴 시작 처리
         foreach (var unit in allyUnits) unit.OnTurnStart();
         foreach (var unit in enemyUnits) unit.OnTurnStart();
 
@@ -377,23 +398,20 @@ public class BattleManager : MonoBehaviour
         foreach (var unit in enemyUnits)
             if (unit.IsStaggered) Log($"{unit.UnitName} 흐트러짐! 행동 불가");
 
-        // ── ActionBuilder로 행동 목록 조립 ──
         var actions = _actionBuilder.Build(
             allyUnits, enemyUnits,
             BuildSelectedSkills(), BuildSelectedIndices(), BuildSelectedTargets(),
             GetRandomAliveEnemy, GetRandomAliveAlly, Log);
 
-        // 속도 다이스 표시 갱신
         foreach (var action in actions)
         {
             OnSpeedRolled?.Invoke(action.actor, action.speed);
-            if (enemyUnits.Contains(action.actor))
+            if (!action.isAllyAction)
                 OnEnemyIntentRevealed?.Invoke(action.actor, action.skill);
         }
 
         var plan = TurnResolver.Plan(actions);
 
-        // 계획된 타겟 라인 표시 (합/일방 구분)
         foreach (var pair in plan.clashes)
         {
             OnTargetLineUpdated?.Invoke(pair.attacker.actor, pair.defender.actor, true);
@@ -403,28 +421,26 @@ public class BattleManager : MonoBehaviour
         foreach (var action in plan.unopposed)
             OnTargetLineUpdated?.Invoke(action.actor, action.target, false);
 
-        // ── 결과 적용 ──
         _fsm.TransitionTo(BattleState.ApplyResult);
         OnStateChanged?.Invoke(_fsm.Current);
 
-        // 합 처리
         foreach (var pair in plan.clashes)
         {
-            Log($"[합] {pair.attacker.skill.skillName}({BattleUtils.GetDamageTypeLabel(pair.attacker.skill)}) vs {pair.defender.skill.skillName}({BattleUtils.GetDamageTypeLabel(pair.defender.skill)})");
+            Log($"[합] {pair.attacker.actor.UnitName}:{pair.attacker.skill.skillName} vs {pair.defender.actor.UnitName}:{pair.defender.skill.skillName}");
             var clash = ClashResolver.Resolve(
                 pair.attacker.actor, pair.attacker.skill,
                 pair.defender.actor, pair.defender.skill,
                 pair.attacker.speed, pair.defender.speed);
             OnClashResolved?.Invoke(clash);
-            _turnExecutor.ExecuteClashDamage(clash, pair.attacker.actor, pair.defender.actor);
             _turnExecutor.ApplyClashSideEffects(clash, pair.attacker.actor, pair.defender.actor);
+            _turnExecutor.ExecuteClashDamage(clash, pair.attacker.actor, pair.defender.actor);
+            ApplyBattleMorale(pair.attacker.actor, pair.defender.actor, clash);
             LogClashResult(clash);
             yield return new WaitForSeconds(0.5f);
         }
 
         yield return new WaitForSeconds(0.2f);
 
-        // 일방 공격 처리
         foreach (var action in plan.unopposed)
         {
             if (!action.actor.IsAlive || !action.target.IsAlive) continue;
@@ -442,12 +458,12 @@ public class BattleManager : MonoBehaviour
             }
 
             _turnExecutor.ExecuteUnopposed(action);
+            ApplyKillMorale(action.actor, action.target);
             yield return new WaitForSeconds(0.5f);
         }
 
         yield return new WaitForSeconds(0.3f);
 
-        // 턴 종료
         foreach (var unit in allyUnits) { unit.ClearShield(); unit.TickParalysis(); int burn = unit.TickBurn(); if (burn > 0) Log($"  [화상] {unit.UnitName} {burn} 피해"); }
         foreach (var unit in enemyUnits) { unit.ClearShield(); unit.TickParalysis(); int burn = unit.TickBurn(); if (burn > 0) Log($"  [화상] {unit.UnitName} {burn} 피해"); }
 
@@ -515,6 +531,52 @@ public class BattleManager : MonoBehaviour
             if (pair.Value != null && pair.Value.target != null)
                 map[pair.Key] = pair.Value.target;
         return map;
+    }
+
+    private void ApplyPreparedDefense()
+    {
+        foreach (var pair in _sel.units)
+        {
+            var unitIndex = pair.Key;
+            var selection = pair.Value;
+            if (selection == null || !selection.isGuarding || selection.skill == null) continue;
+            if (unitIndex < 0 || unitIndex >= allyUnits.Count) continue;
+
+            var unit = allyUnits[unitIndex];
+            if (unit == null || !unit.IsAlive) continue;
+
+            int shieldPower = CoinCalculator.RollPower(selection.skill, selection.skill.coinCount, unit.CoinHeadsChance);
+            unit.ApplyShield(shieldPower);
+            Log($"[방어] {unit.UnitName} 방어 발동! 방어막 {shieldPower}");
+        }
+    }
+
+    private void ApplyBattleMorale(Unit attacker, Unit defender, ClashResult clash)
+    {
+        if (clash.outcome == ClashOutcome.Draw) return;
+
+        var winner = clash.winnerIsAttacker ? attacker : defender;
+        var loser = clash.winnerIsAttacker ? defender : attacker;
+
+        if (winner != null) winner.OnClashWin();
+        if (loser != null) loser.ChangeSP(-10);
+
+        var defeated = clash.winnerIsAttacker ? defender : attacker;
+        ApplyKillMorale(winner, defeated);
+    }
+
+    private void ApplyKillMorale(Unit killer, Unit defeated)
+    {
+        if (killer == null || defeated == null || defeated.IsAlive) return;
+
+        killer.ChangeSP(10);
+
+        var defeatedTeam = allyUnits.Contains(defeated) ? allyUnits : enemyUnits;
+        foreach (var unit in defeatedTeam)
+        {
+            if (unit == null || !unit.IsAlive || unit == defeated) continue;
+            unit.OnAllyDeath();
+        }
     }
 
     private Unit GetRandomAliveEnemy()

@@ -1,16 +1,17 @@
-
 public class TurnAction
 {
-    public Unit actor;       // 행동 유닛
-    public SkillData skill;  // 선택한 스킬
-    public Unit target;      // 공격 대상
-    public int speed;        // 이번 턴 속도
+    public Unit actor;
+    public SkillData skill;
+    public Unit target;
+    public int speed;
+    public bool isAllyAction;
 
-    public TurnAction(Unit actor, SkillData skill, Unit target, int speed)
+    public TurnAction(Unit actor, SkillData skill, Unit target, int speed, bool isAllyAction = false)
     {
         this.actor = actor;
         this.skill = skill;
         this.target = target;
         this.speed = speed;
+        this.isAllyAction = isAllyAction;
     }
 }

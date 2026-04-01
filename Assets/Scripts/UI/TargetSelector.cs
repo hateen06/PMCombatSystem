@@ -8,7 +8,7 @@ public class TargetSelector : MonoBehaviour
     private void Start()
     {
         _bm = GetComponent<BattleManager>();
-        if (_bm == null) _bm = FindObjectOfType<BattleManager>();
+        if (_bm == null) _bm = FindFirstObjectByType<BattleManager>();
     }
 
     private void Update()

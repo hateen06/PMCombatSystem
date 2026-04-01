@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+
 public class TurnExecutor
 {
     private readonly List<Unit> _allyUnits;
@@ -25,33 +26,47 @@ public class TurnExecutor
         _cameraShake = cameraShake;
         _presenter = presenter;
     }
-    public void ExecuteUnopposed(TurnAction action)
+
+    public int ExecuteUnopposed(TurnAction action)
     {
-        if (!action.actor.IsAlive || !action.target.IsAlive) return;
+        if (!action.actor.IsAlive || !action.target.IsAlive) return 0;
 
         PlayAttackSequence(action.actor, action.target);
 
-        var dmgResult = DamageProcessor.Process(new DamageProcessor.DamageContext {
-            attacker = action.actor, target = action.target, skill = action.skill
-        });
+        int paraCoins = action.actor.GetParalyzedCoins();
+        var hitPowers = CoinCalculator.RollHitPowers(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins);
+        int bleedDmg = action.actor.ConsumeBleed(action.skill.coinCount);
+        if (bleedDmg > 0) Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {bleedDmg}");
+        if (paraCoins > 0) Log($"  [마비] {action.actor.UnitName} 코인 {paraCoins}개 무효!");
 
-        if (dmgResult.bleedDamage > 0)
-            Log($"  [출혈] {action.actor.UnitName} 출혈 피해 {dmgResult.bleedDamage}");
-        if (dmgResult.paralyzedCoins > 0)
-            Log($"  [마비] {action.actor.UnitName} 코인 {dmgResult.paralyzedCoins}개 무효!");
-        Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName}({BattleUtils.GetDamageTypeLabel(action.skill)}) → {dmgResult.finalDamage} 피해");
-
-        ApplyHitEffects(action.target, dmgResult.finalDamage, action.skill.damageType);
-
-        // 상태이상 부여
-        if (action.skill.statusPotency > 0 && action.skill.statusCount > 0)
+        int totalDamage = 0;
+        for (int i = 0; i < hitPowers.Count && action.target.IsAlive; i++)
         {
-            action.target.AddStatus(action.skill.inflictStatus,
-                action.skill.statusPotency, action.skill.statusCount);
+            var dmgResult = DamageProcessor.Process(new DamageProcessor.DamageContext
+            {
+                attacker = action.actor,
+                target = action.target,
+                skill = action.skill,
+                rawDamage = hitPowers[i],
+                skipCoinRoll = true
+            });
+
+            totalDamage += dmgResult.finalDamage;
+            ApplyHitEffects(action.target, dmgResult.finalDamage, action.skill.damageType);
+        }
+
+        Log($"[일방] {action.actor.UnitName}의 {action.skill.skillName}({BattleUtils.GetDamageTypeLabel(action.skill)}) → {totalDamage} 피해");
+
+        if (action.skill.statusPotency > 0 && action.skill.statusCount > 0 && action.target.IsAlive)
+        {
+            action.target.AddStatus(action.skill.inflictStatus, action.skill.statusPotency, action.skill.statusCount);
             Log($"  [{action.skill.inflictStatus}] {action.target.UnitName}에게 부여");
         }
+
+        return totalDamage;
     }
-    public void ExecuteEvade(TurnAction action, SkillData evadeSkill, Unit evader)
+
+    public int ExecuteEvade(TurnAction action, SkillData evadeSkill, Unit evader)
     {
         int paraCoins = action.actor.GetParalyzedCoins();
         int attackPower = CoinCalculator.RollPower(action.skill, action.skill.coinCount, action.actor.CoinHeadsChance, paraCoins);
@@ -64,23 +79,25 @@ public class TurnExecutor
         if (evadePower >= attackPower)
         {
             Log($"[회피 성공] {evader.UnitName} 회피! (회피 {evadePower} >= 공격 {attackPower})");
-            return;
+            return 0;
         }
 
         int reducedDamage = attackPower - evadePower;
-        var evadeResult = DamageProcessor.Process(new DamageProcessor.DamageContext {
-            attacker = action.actor, target = action.target,
-            skill = action.skill, rawDamage = reducedDamage, skipCoinRoll = true
+        var evadeResult = DamageProcessor.Process(new DamageProcessor.DamageContext
+        {
+            attacker = action.actor,
+            target = action.target,
+            skill = action.skill,
+            rawDamage = reducedDamage,
+            skipCoinRoll = true
         });
         Log($"[회피 실패] 관통 피해 {evadeResult.finalDamage} (공격 {attackPower} - 회피 {evadePower})");
         ApplyHitEffects(action.target, evadeResult.finalDamage, action.skill.damageType);
+        return evadeResult.finalDamage;
     }
+
     public void ApplyClashSideEffects(ClashResult clash, Unit attacker, Unit defender)
     {
-        var winner = clash.winnerIsAttacker ? attacker : defender;
-        if (clash.winnerSPChange != 0)
-            winner.ChangeSP(clash.winnerSPChange);
-
         foreach (var sa in clash.statusApplications)
         {
             var target = sa.applyToAttacker ? attacker : defender;
@@ -89,34 +106,50 @@ public class TurnExecutor
         }
     }
 
-    public void ExecuteClashDamage(ClashResult clash, Unit ally, Unit enemy)
+    public int ExecuteClashDamage(ClashResult clash, Unit ally, Unit enemy)
     {
+        int totalDamage = 0;
         if (clash.outcome == ClashOutcome.AttackerWin)
         {
-            var result = DamageProcessor.Process(new DamageProcessor.DamageContext {
-                attacker = ally, target = enemy,
-                skill = clash.attackerSkill, rawDamage = clash.damage, skipCoinRoll = true
-            });
-            ApplyHitEffects(enemy, result.finalDamage, clash.attackerSkill?.damageType ?? DamageType.Slash);
+            for (int i = 0; i < clash.followUpHitPowers.Count && enemy.IsAlive; i++)
+            {
+                var result = DamageProcessor.Process(new DamageProcessor.DamageContext
+                {
+                    attacker = ally,
+                    target = enemy,
+                    skill = clash.attackerSkill,
+                    rawDamage = clash.followUpHitPowers[i],
+                    skipCoinRoll = true
+                });
+                totalDamage += result.finalDamage;
+                ApplyHitEffects(enemy, result.finalDamage, clash.attackerSkill?.damageType ?? DamageType.Slash);
+            }
         }
         else if (clash.outcome == ClashOutcome.DefenderWin)
         {
-            var result = DamageProcessor.Process(new DamageProcessor.DamageContext {
-                attacker = enemy, target = ally,
-                skill = clash.defenderSkill, rawDamage = clash.damage, skipCoinRoll = true
-            });
-            ApplyHitEffects(ally, result.finalDamage, clash.defenderSkill?.damageType ?? DamageType.Slash);
+            for (int i = 0; i < clash.followUpHitPowers.Count && ally.IsAlive; i++)
+            {
+                var result = DamageProcessor.Process(new DamageProcessor.DamageContext
+                {
+                    attacker = enemy,
+                    target = ally,
+                    skill = clash.defenderSkill,
+                    rawDamage = clash.followUpHitPowers[i],
+                    skipCoinRoll = true
+                });
+                totalDamage += result.finalDamage;
+                ApplyHitEffects(ally, result.finalDamage, clash.defenderSkill?.damageType ?? DamageType.Slash);
+            }
         }
+        return totalDamage;
     }
 
     public void ApplyHitEffects(Unit target, int finalDamage, DamageType damageType)
     {
         if (finalDamage <= 0) return;
 
-        // Breakdown 텍스트 갱신
         _presenter.UpdateBreakdown(target, finalDamage, damageType);
 
-        // HP바 피격
         bool isAlly = _allyUnits.Contains(target);
         if (isAlly)
         {
@@ -129,7 +162,6 @@ public class TurnExecutor
             if (idx >= 0 && idx < _enemyHPBars.Count && _enemyHPBars[idx] != null) _enemyHPBars[idx].OnHit();
         }
 
-        // 피격 플래시
         var flash = target.GetComponent<HitFlash>();
         if (flash != null) flash.Flash();
         else
