@@ -10,6 +10,9 @@ public class HPBar : MonoBehaviour
 
     [SerializeField] private TMP_Text shieldText;
     [SerializeField] private TMP_Text hpText;
+    [SerializeField] private RectTransform spRoot;
+    [SerializeField] private Image spFillImage;
+    [SerializeField] private TMP_Text spText;
 
     private Unit _target;
     private Tween _currentTween;
@@ -21,6 +24,7 @@ public class HPBar : MonoBehaviour
         {
             _target.OnHPChanged -= HandleHPChanged;
             _target.OnShieldChanged -= HandleShieldChanged;
+            _target.OnSPChanged -= HandleSPChanged;
         }
 
         _target = unit;
@@ -43,20 +47,25 @@ public class HPBar : MonoBehaviour
             fillRect.offsetMax = new Vector2(-2f, -2f);
         }
 
-        // fillImage는 Simple 타입으로 (Filled 안 씀)
+        var rootImage = GetComponent<Image>();
+        if (rootImage != null)
+            rootImage.color = new Color(0.03f, 0.03f, 0.04f, 0.95f);
+
         if (fillImage != null)
             fillImage.type = Image.Type.Simple;
 
-        // 흐트러짐 구간 마커 생성
+        EnsureSPBar();
         CreateStaggerMarkers();
 
         if (_target != null)
         {
             _target.OnHPChanged += HandleHPChanged;
             _target.OnShieldChanged += HandleShieldChanged;
+            _target.OnSPChanged += HandleSPChanged;
         }
 
         Refresh();
+        UpdateSPDisplay();
         UpdateShieldDisplay();
     }
     private void CreateStaggerMarkers()
@@ -95,6 +104,7 @@ public class HPBar : MonoBehaviour
 
     private void HandleHPChanged(int current, int max) => Refresh();
     private void HandleShieldChanged(int shield) => UpdateShieldDisplay();
+    private void HandleSPChanged(int sp) => UpdateSPDisplay();
 
     private void UpdateShieldDisplay()
     {
@@ -105,12 +115,15 @@ public class HPBar : MonoBehaviour
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(1f, 0.5f);
             rt.anchorMax = new Vector2(1f, 0.5f);
-            rt.anchoredPosition = new Vector2(35f, 0f);
-            rt.sizeDelta = new Vector2(60f, 24f);
+            rt.anchoredPosition = new Vector2(34f, 10f);
+            rt.sizeDelta = new Vector2(64f, 22f);
             shieldText = go.GetComponent<TMPro.TextMeshProUGUI>();
-            shieldText.fontSize = 16;
+            shieldText.fontSize = 14;
             shieldText.alignment = TMPro.TextAlignmentOptions.MidlineLeft;
-            shieldText.color = new Color(0.3f, 0.7f, 1f);
+            shieldText.color = new Color(0.55f, 0.82f, 1f);
+            shieldText.outlineWidth = 0.18f;
+            shieldText.outlineColor = new Color32(0, 0, 0, 220);
+            shieldText.textWrappingMode = TextWrappingModes.NoWrap;
         }
 
         if (_target == null || _target.Shield <= 0)
@@ -118,7 +131,7 @@ public class HPBar : MonoBehaviour
             shieldText.gameObject.SetActive(false);
             return;
         }
-        shieldText.text = $"🛡{_target.Shield}";
+        shieldText.text = $"SH { _target.Shield }";
         shieldText.gameObject.SetActive(true);
     }
     public void Refresh()
@@ -127,7 +140,7 @@ public class HPBar : MonoBehaviour
 
         EnsureHPText();
         if (hpText != null)
-            hpText.text = $"{_target.CurrentHP}/{_target.MaxHP}";
+            hpText.text = $"HP {_target.CurrentHP}/{_target.MaxHP}";
 
         float targetRatio = Mathf.Clamp01(_target.HPRatio);
 
@@ -143,6 +156,11 @@ public class HPBar : MonoBehaviour
             targetRatio,
             tweenDuration
         ).SetEase(Ease.OutQuad);
+
+        if (fillImage != null)
+            fillImage.color = _target.IsStaggered ? new Color(1f, 0.65f, 0.32f, 1f) : new Color(0.82f, 0.18f, 0.18f, 1f);
+
+        UpdateSPDisplay();
     }
     private void EnsureHPText()
     {
@@ -153,17 +171,79 @@ public class HPBar : MonoBehaviour
         var rt = go.GetComponent<RectTransform>();
         rt.anchorMin = new Vector2(0.5f, 1f);
         rt.anchorMax = new Vector2(0.5f, 1f);
-        rt.anchoredPosition = new Vector2(0f, 14f);
-        rt.sizeDelta = new Vector2(96f, 20f);
+        rt.anchoredPosition = new Vector2(0f, 22f);
+        rt.sizeDelta = new Vector2(132f, 20f);
 
         hpText = go.GetComponent<TextMeshProUGUI>();
         hpText.fontSize = 14;
         hpText.alignment = TextAlignmentOptions.Center;
-        hpText.color = Color.white;
-        hpText.outlineWidth = 0.18f;
-        hpText.outlineColor = new Color32(0, 0, 0, 220);
+        hpText.color = new Color(1f, 0.95f, 0.95f, 1f);
+        hpText.outlineWidth = 0.22f;
+        hpText.outlineColor = new Color32(0, 0, 0, 235);
         hpText.textWrappingMode = TextWrappingModes.NoWrap;
+        hpText.fontStyle = FontStyles.Bold;
         hpText.text = string.Empty;
+    }
+
+    private void EnsureSPBar()
+    {
+        if (spRoot != null && spFillImage != null && spText != null) return;
+
+        var rootGO = new GameObject("SPBar", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        rootGO.transform.SetParent(transform, false);
+        spRoot = rootGO.GetComponent<RectTransform>();
+        spRoot.anchorMin = new Vector2(0.5f, 1f);
+        spRoot.anchorMax = new Vector2(0.5f, 1f);
+        spRoot.pivot = new Vector2(0.5f, 0.5f);
+        spRoot.anchoredPosition = new Vector2(0f, -10f);
+        spRoot.sizeDelta = new Vector2(112f, 8f);
+
+        var bg = rootGO.GetComponent<Image>();
+        bg.color = new Color(0.06f, 0.08f, 0.11f, 0.92f);
+        bg.raycastTarget = false;
+
+        var fillGO = new GameObject("SPFill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        fillGO.transform.SetParent(spRoot, false);
+        var fillRT = fillGO.GetComponent<RectTransform>();
+        fillRT.anchorMin = new Vector2(0f, 0f);
+        fillRT.anchorMax = new Vector2(1f, 1f);
+        fillRT.offsetMin = new Vector2(1f, 1f);
+        fillRT.offsetMax = new Vector2(-1f, -1f);
+        spFillImage = fillGO.GetComponent<Image>();
+        spFillImage.color = new Color(0.28f, 0.62f, 1f, 1f);
+        spFillImage.raycastTarget = false;
+
+        var textGO = new GameObject("SPText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textGO.transform.SetParent(transform, false);
+        var textRT = textGO.GetComponent<RectTransform>();
+        textRT.anchorMin = new Vector2(0.5f, 1f);
+        textRT.anchorMax = new Vector2(0.5f, 1f);
+        textRT.pivot = new Vector2(0.5f, 0.5f);
+        textRT.anchoredPosition = new Vector2(0f, -28f);
+        textRT.sizeDelta = new Vector2(128f, 22f);
+        spText = textGO.GetComponent<TextMeshProUGUI>();
+        spText.fontSize = 13;
+        spText.alignment = TextAlignmentOptions.Center;
+        spText.color = new Color(0.78f, 0.9f, 1f, 1f);
+        spText.outlineWidth = 0.22f;
+        spText.outlineColor = new Color32(0, 0, 0, 235);
+        spText.textWrappingMode = TextWrappingModes.NoWrap;
+        spText.fontStyle = FontStyles.Bold;
+    }
+
+    private void UpdateSPDisplay()
+    {
+        EnsureSPBar();
+        if (_target == null || spRoot == null || spFillImage == null || spText == null) return;
+
+        float ratio = Mathf.InverseLerp(-45f, 45f, _target.SP);
+        var fillRT = spFillImage.rectTransform;
+        var anchorMax = fillRT.anchorMax;
+        anchorMax.x = ratio;
+        fillRT.anchorMax = anchorMax;
+        spFillImage.color = _target.SP >= 0 ? new Color(0.28f, 0.62f, 1f, 1f) : new Color(0.95f, 0.38f, 0.38f, 1f);
+        spText.text = $"SP {_target.SP}";
+        spText.color = _target.SP >= 0 ? new Color(0.75f, 0.88f, 1f, 1f) : new Color(1f, 0.7f, 0.7f, 1f);
     }
 
     public void OnHit()
