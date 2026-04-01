@@ -47,6 +47,9 @@ public class BattleUI : MonoBehaviour
     [Header("속도 타임라인")]
     [SerializeField] private SpeedTimelineUI speedTimeline;
 
+    [Header("합 코인 UI")]
+    [SerializeField] private ClashCoinPanelUI clashCoinPanel;
+
     [Header("타겟 라인")]
     [SerializeField] private TargetLineUI targetLinePrefab;
     [SerializeField] private Transform targetLineRoot;
@@ -61,6 +64,7 @@ public class BattleUI : MonoBehaviour
     private readonly HashSet<Unit> _boundUnits = new HashSet<Unit>();
     private readonly Dictionary<Unit, ResistanceIndicatorUI> _resistIndicators = new();
     private readonly Dictionary<Unit, SpeedDiceUI> _enemyIntentIcons = new();
+    private readonly Dictionary<Unit, (Unit target, SkillData skill, int speed)> _enemyIntentMap = new();
     private List<SkillCardUI[]> AllyCardGroups => new() { skillCards, skillCards2, skillCards3 };
 
     private int _selectedIndex = -1;
@@ -87,6 +91,7 @@ public class BattleUI : MonoBehaviour
         RefreshSkillCards();
         BindObservedData();
         EnsureSpeedTimeline();
+        EnsureClashCoinPanel();
         CreateColorVeils();
 
         // 레거시 버튼 OnClick (카드 없을 때 폴백)
@@ -131,12 +136,14 @@ public class BattleUI : MonoBehaviour
         battleManager.OnDamageDealt += SpawnDamagePopup;
         battleManager.OnBreakdownUpdated += UpdateBreakdown;
         battleManager.OnClashPreviewUpdated += UpdateClashPreview;
+        battleManager.OnClashResolved += ShowClashCoins;
         battleManager.OnIntentUpdated += UpdateIntent;
         battleManager.OnTargetPreviewUpdated += UpdateTargetPreview;
         battleManager.OnSpeedRolled += UpdateSpeedDice;
         battleManager.OnTargetLineUpdated += UpdateTargetLine;
         battleManager.OnClashPairHighlighted += OnClashPairHighlighted;
         battleManager.OnEnemyIntentRevealed += OnEnemyIntentRevealed;
+        battleManager.OnEnemyIntentAssigned += OnEnemyIntentAssigned;
         battleManager.OnHandDrawn += RefreshSkillCards;
         battleManager.OnCardOverridden += OnCardOverridden;
         BindObservedData();
@@ -150,12 +157,14 @@ public class BattleUI : MonoBehaviour
         battleManager.OnDamageDealt -= SpawnDamagePopup;
         battleManager.OnBreakdownUpdated -= UpdateBreakdown;
         battleManager.OnClashPreviewUpdated -= UpdateClashPreview;
+        battleManager.OnClashResolved -= ShowClashCoins;
         battleManager.OnIntentUpdated -= UpdateIntent;
         battleManager.OnTargetPreviewUpdated -= UpdateTargetPreview;
         battleManager.OnSpeedRolled -= UpdateSpeedDice;
         battleManager.OnTargetLineUpdated -= UpdateTargetLine;
         battleManager.OnClashPairHighlighted -= OnClashPairHighlighted;
         battleManager.OnEnemyIntentRevealed -= OnEnemyIntentRevealed;
+        battleManager.OnEnemyIntentAssigned -= OnEnemyIntentAssigned;
         battleManager.OnHandDrawn -= RefreshSkillCards;
         battleManager.OnCardOverridden -= OnCardOverridden;
         UnbindObservedData();
@@ -235,9 +244,25 @@ public class BattleUI : MonoBehaviour
         speedTimeline = go.GetComponent<SpeedTimelineUI>();
     }
 
+    private void EnsureClashCoinPanel()
+    {
+        if (clashCoinPanel != null) return;
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+        var go = new GameObject("ClashCoinPanel", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(ClashCoinPanelUI));
+        go.transform.SetParent(canvas.transform, false);
+        clashCoinPanel = go.GetComponent<ClashCoinPanelUI>();
+    }
+
     private void OnClashPairHighlighted(Unit a, Unit b)
     {
         if (speedTimeline != null) speedTimeline.HighlightClashPair(a, b);
+    }
+
+    private void ShowClashCoins(ClashResult clash)
+    {
+        if (clashCoinPanel == null) return;
+        clashCoinPanel.Show(clash);
     }
 
     private void OnEnemyIntentRevealed(Unit enemy, SkillData skill)
@@ -246,7 +271,6 @@ public class BattleUI : MonoBehaviour
         if (speedTimeline != null)
             speedTimeline.AddUnit(enemy, 0, true, skill);
 
-        // 저항 표시: 모든 아군에 대해 이 스킬의 피해 타입 기준 저항 표시
         if (battleManager == null) return;
         foreach (var ally in battleManager.AllyUnits)
         {
@@ -263,6 +287,14 @@ public class BattleUI : MonoBehaviour
             }
             indicator.Show(skill.damageType);
         }
+    }
+
+    private void OnEnemyIntentAssigned(Unit enemy, Unit target, SkillData skill, int speed)
+    {
+        if (enemy == null || target == null) return;
+        _enemyIntentMap[enemy] = (target, skill, speed);
+        if (speedTimeline != null)
+            speedTimeline.SetIntent(enemy, target, skill, speed);
     }
 
     private void HandleStaggerChanged(bool isStaggered, int count)
@@ -446,7 +478,23 @@ public class BattleUI : MonoBehaviour
             go.transform.SetParent(parent, false);
             line = go.GetComponent<TargetLineUI>();
         }
-        line.SetTargets(from, to, isClash);
+
+        string annotation = string.Empty;
+        if (isClash)
+        {
+            if (battleManager != null && battleManager.AllyUnits.Contains(from) && _enemyIntentMap.TryGetValue(to, out var intent))
+                annotation = intent.target != from ? "가로채기 합" : "정면 합";
+            else if (battleManager != null && battleManager.EnemyUnits.Contains(from) && _enemyIntentMap.TryGetValue(from, out var enemyIntent))
+                annotation = enemyIntent.target != to ? "가로채기됨" : "합 성립";
+            else
+                annotation = "합 성립";
+        }
+        else if (battleManager != null && battleManager.EnemyUnits.Contains(from))
+        {
+            annotation = "일방 공격";
+        }
+
+        line.SetTargets(from, to, isClash, annotation);
         _targetLines.Add(line);
     }
 
@@ -477,6 +525,7 @@ public class BattleUI : MonoBehaviour
         if (canInteract)
         {
             _selectedIndex = -1;
+            _enemyIntentMap.Clear();
 
             if (speedTimeline != null) speedTimeline.Clear();
 

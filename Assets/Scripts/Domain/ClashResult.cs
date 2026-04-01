@@ -26,6 +26,10 @@ public class ClashResult
     public int loserSPChange;
     public bool winnerIsAttacker;
     public int remainingCoins;
+    public int attackerStartingCoins;
+    public int defenderStartingCoins;
+    public int attackerRemainingCoins;
+    public int defenderRemainingCoins;
     public List<int> followUpHitPowers = new();
     public List<StatusApplication> statusApplications = new();
     public List<(bool isAttacker, int bleedDamage)> bleedResults = new();
